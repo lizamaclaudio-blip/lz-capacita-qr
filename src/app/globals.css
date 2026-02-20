@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+.blob {
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  border-radius: 9999px;
+  filter: blur(40px);
+  opacity: 0.35;
+  mix-blend-mode: screen;
+}
+
+.blob-1 {
+  left: -160px;
+  top: -140px;
+  background: radial-gradient(circle at 30% 30%, rgba(52, 211, 153, 0.9), rgba(16, 185, 129, 0.2));
+  animation: float1 10s ease-in-out infinite;
+}
+
+.blob-2 {
+  right: -200px;
+  top: 120px;
+  background: radial-gradient(circle at 30% 30%, rgba(110, 231, 183, 0.8), rgba(5, 150, 105, 0.15));
+  animation: float2 12s ease-in-out infinite;
+}
+
+.blob-3 {
+  left: 50%;
+  bottom: -240px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle at 30% 30%, rgba(16, 185, 129, 0.7), rgba(2, 44, 34, 0.2));
+  animation: float3 14s ease-in-out infinite;
+}
+
+@keyframes float1 {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(60px, 40px) scale(1.05); }
+}
+@keyframes float2 {
+  0%, 100% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(-50px, 30px) scale(1.06); }
+}
+@keyframes float3 {
+  0%, 100% { transform: translateX(-50%) translateY(0px) scale(1); }
+  50% { transform: translateX(-50%) translateY(-40px) scale(1.05); }
+}
