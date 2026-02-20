@@ -1,0 +1,75 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 40px rgba(2, 6, 23, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.title {
+  font-weight: 900;
+  font-size: 18px;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.email {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.logoutBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #0b1220;
+  color: white;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.logoutIcon {
+  width: 18px;
+  height: 18px;
+}
+2.5) src/components/app/Topbar.tsx
+"use client";
+
+import styles from "./Topbar.module.css";
+import { IconLogout } from "./icons";
+
+export default function Topbar({
+  title,
+  email,
+  onLogout,
+}: {
+  title: string;
+  email: string | null;
+  onLogout: () => void;
+}) {
+  return (
+    <header className={styles.topbar}>
+      <div className={styles.title}>{title}</div>
+
+      <div className={styles.right}>
+        {email && <div className={styles.email}>{email}</div>}
+        <button className={styles.logoutBtn} onClick={onLogout}>
+          <IconLogout className={styles.logoutIcon} />
+          Salir
+        </button>
+      </div>
+    </header>
+  );
+}

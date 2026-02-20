@@ -1,0 +1,351 @@
+.wrap {
+  display: grid;
+  gap: 18px;
+}
+
+/* HERO */
+.hero {
+  display: grid;
+  grid-template-columns: 1.4fr 0.6fr;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background:
+    radial-gradient(900px 320px at 20% 0%, rgba(16, 185, 129, 0.14), transparent 60%),
+    radial-gradient(900px 320px at 100% 0%, rgba(59, 130, 246, 0.10), transparent 55%),
+    #ffffff;
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.06);
+}
+
+.heroLeft {
+  min-width: 0;
+}
+
+.kicker {
+  font-size: 12px;
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.55);
+}
+
+.h1 {
+  margin: 6px 0 0;
+  font-size: 26px;
+  font-weight: 950;
+  color: #0f172a;
+}
+
+.sub {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: rgba(15, 23, 42, 0.62);
+  line-height: 1.35;
+}
+
+.heroBtns {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.heroRight {
+  display: grid;
+  align-items: center;
+  justify-items: end;
+}
+
+.logoCard {
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(15, 23, 42, 0.03);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.06);
+  text-align: center;
+}
+
+.logoHint {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(15, 23, 42, 0.6);
+}
+
+/* MODULES */
+.modules {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.moduleCard {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.06);
+  padding: 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.moduleTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.moduleIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.20);
+  color: rgba(15, 23, 42, 0.85);
+}
+
+.moduleTitle {
+  font-weight: 950;
+  color: #0f172a;
+}
+
+.moduleDesc {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.62);
+  line-height: 1.35;
+  min-height: 32px;
+}
+
+.moduleValue {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.86);
+}
+
+/* badges */
+.badgeOk,
+.badgeSoon {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 950;
+  font-size: 12px;
+}
+
+.badgeOk {
+  border: 1px solid rgba(16, 185, 129, 0.30);
+  background: rgba(16, 185, 129, 0.14);
+  color: rgba(6, 95, 70, 0.95);
+}
+
+.badgeSoon {
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.14);
+  color: rgba(120, 53, 15, 0.95);
+}
+
+/* Alerts */
+.error {
+  border: 1px solid rgba(220, 38, 38, 0.20);
+  background: rgba(220, 38, 38, 0.08);
+  color: rgba(127, 29, 29, 0.95);
+  padding: 12px 14px;
+  border-radius: 16px;
+  font-weight: 900;
+  font-size: 13px;
+}
+
+/* Generic card */
+.card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(2, 6, 23, 0.06);
+  padding: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.cardTitle {
+  font-weight: 950;
+  color: #0f172a;
+}
+
+.cardSub {
+  margin-top: -6px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.6);
+}
+
+/* Form */
+.form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: end;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.6);
+}
+
+.input {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 14px;
+  padding: 11px 12px;
+  outline: none;
+  font-size: 14px;
+}
+
+.input:focus {
+  border-color: rgba(16, 185, 129, 0.55);
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.14);
+}
+
+.saveBtn {
+  grid-column: 1 / -1;
+  border: 0;
+  cursor: pointer;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-weight: 950;
+  color: #062312;
+  background: linear-gradient(180deg, #34d399, #10b981);
+}
+
+/* Buttons */
+.darkBtn {
+  border: 0;
+  cursor: pointer;
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-weight: 950;
+  color: #fff;
+  background: #0f172a;
+}
+
+.secondaryBtn {
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: #fff;
+  padding: 10px 12px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 950;
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.06);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Companies grid */
+.muted {
+  font-size: 13px;
+  color: rgba(15, 23, 42, 0.62);
+  font-weight: 800;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.companyCard {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.02);
+  box-shadow: 0 10px 22px rgba(2, 6, 23, 0.06);
+  padding: 14px;
+  text-align: left;
+  cursor: pointer;
+  display: grid;
+  gap: 12px;
+}
+
+.companyCard:hover {
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.companyTop {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.8);
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.20);
+  overflow: hidden;
+}
+
+.companyInfo {
+  min-width: 0;
+}
+
+.companyName {
+  font-weight: 950;
+  color: #0f172a;
+}
+
+.companyMeta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.62);
+}
+
+.companyBottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.openHint {
+  font-weight: 950;
+  color: rgba(15, 23, 42, 0.75);
+}
+
+/* Responsive */
+@media (max-width: 1100px) {
+  .modules {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+  .heroRight {
+    justify-items: start;
+  }
+  .form {
+    grid-template-columns: 1fr;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}

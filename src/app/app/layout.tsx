@@ -1,35 +1,63 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import styles from "./layout.module.css";
+import Sidebar from "@/components/app/Sidebar";
+import Topbar from "@/components/app/Topbar";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
+
   const [checking, setChecking] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
+
+  const title = useMemo(() => {
+    if (pathname === "/app" || pathname === "/app/dashboard") return "Dashboard";
+    if (pathname.startsWith("/app/profile")) return "Mi perfil";
+    if (pathname.startsWith("/app/companies/new")) return "Crear empresa";
+    if (pathname.startsWith("/app/companies")) return "Mis empresas";
+    if (pathname.startsWith("/app/sessions")) return "Mis charlas";
+    if (pathname.startsWith("/app/pdfs")) return "Mis PDF";
+    return "Panel";
+  }, [pathname]);
 
   useEffect(() => {
     let alive = true;
 
-    (async () => {
+    async function boot() {
       const { data } = await supabaseBrowser.auth.getSession();
       const session = data.session;
 
       if (!alive) return;
 
       if (!session) {
-        router.replace("/login");
+        router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
         return;
       }
 
       setEmail(session.user?.email ?? null);
       setChecking(false);
-    })();
+    }
+
+    boot();
+
+    const { data: sub } = supabaseBrowser.auth.onAuthStateChange((_event, session) => {
+      if (!alive) return;
+
+      if (!session) {
+        router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
+        return;
+      }
+
+      setEmail(session.user?.email ?? null);
+    });
 
     return () => {
       alive = false;
+      sub.subscription.unsubscribe();
     };
   }, [router]);
 
@@ -39,31 +67,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center opacity-70">
-        Cargando panel…
-      </div>
-    );
+    return <div className={styles.center}>Cargando panel…</div>;
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link href="/app" className="font-bold">
-            LZ Capacita QR · Panel
-          </Link>
+    <div className={styles.shell}>
+      <Sidebar />
 
-          <div className="flex items-center gap-3 text-sm">
-            {email && <span className="text-gray-600">{email}</span>}
-            <button onClick={logout} className="px-3 py-2 rounded border">
-              Salir
-            </button>
-          </div>
-        </div>
-      </header>
+      <div className={styles.main}>
+        {/* ✅ Topbar único (se termina el duplicado) */}
+        <Topbar title={title} email={email} onLogout={logout} />
 
-      <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
+        <div className={styles.content}>{children}</div>
+      </div>
     </div>
   );
 }

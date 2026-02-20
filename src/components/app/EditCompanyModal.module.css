@@ -1,0 +1,211 @@
+.backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,.55);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+  padding: 18px;
+}
+
+.modal{
+  width: min(980px, 100%);
+  background: #fff;
+  border-radius: 22px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.35);
+  overflow: hidden;
+}
+
+.header{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 16px 10px 16px;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.title{
+  font-weight: 950;
+  font-size: 18px;
+}
+
+.sub{
+  margin-top: 3px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.close{
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.alert{
+  margin: 12px 16px 0 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 13px;
+}
+
+.empty{
+  padding: 18px 16px;
+  color: #334155;
+  font-size: 14px;
+}
+
+.section{
+  padding: 14px 16px 6px 16px;
+  font-weight: 900;
+  color: #334155;
+  font-size: 13px;
+}
+
+.grid2{
+  padding: 0 16px 8px 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px){
+  .grid2{ grid-template-columns: 1fr; }
+}
+
+.field{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label{
+  font-size: 12px;
+  font-weight: 800;
+  color: #475569;
+}
+
+.hint{
+  font-weight: 700;
+  color: #94a3b8;
+  margin-left: 6px;
+}
+
+.input{
+  width: 100%;
+  padding: 12px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  outline: none;
+}
+
+.input:focus{
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+}
+
+.file{
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.previewWrap{
+  margin-top: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 10px;
+  background: #fff;
+}
+
+.previewImg{
+  width: 100%;
+  max-height: 140px;
+  object-fit: contain;
+  display: block;
+}
+
+.actions{
+  padding: 12px 16px 16px 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid #eef2f7;
+}
+
+.cancel{
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.save{
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 0;
+  background: #10b981;
+  color: #052e16;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.save:disabled,
+.delete:disabled{
+  opacity: .65;
+  cursor: not-allowed;
+}
+
+.dangerZone{
+  margin: 0 16px 16px 16px;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  border-radius: 18px;
+  padding: 12px;
+}
+
+.dangerTitle{
+  font-weight: 950;
+  color: #9a3412;
+}
+
+.dangerText{
+  margin-top: 4px;
+  font-size: 12px;
+  color: #7c2d12;
+}
+
+.delete{
+  margin-top: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid #fecaca;
+  background: #ef4444;
+  color: #fff;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.debug{
+  padding: 0 16px 14px 16px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.mono{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  color: #334155;
+}

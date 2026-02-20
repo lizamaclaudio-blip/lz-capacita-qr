@@ -1,0 +1,105 @@
+.sidebar {
+  width: 320px;
+  min-width: 320px;
+  padding: 18px;
+  color: #eaf3ff;
+  background: radial-gradient(1200px 600px at 20% -10%, rgba(80, 200, 255, 0.25), transparent 60%),
+    linear-gradient(180deg, #0b1b2c, #061523);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brandCard {
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.brandLogo {
+  width: 100%;
+  height: 86px;
+  object-fit: contain;
+  display: block;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.brandTitle {
+  margin-top: 12px;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: 0.2px;
+}
+
+.brandSub {
+  margin-top: 4px;
+  opacity: 0.75;
+  font-size: 13px;
+}
+
+.nav {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: 16px;
+  text-decoration: none;
+  color: #eaf3ff;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: transform 0.12s ease, background 0.12s ease, border 0.12s ease;
+}
+
+.navItem:hover {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.active {
+  background: linear-gradient(90deg, rgba(16, 185, 129, 0.26), rgba(16, 185, 129, 0.12));
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.iconWrap {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  opacity: 0.95;
+}
+
+.label {
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.footer {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 16px;
+  opacity: 0.65;
+  font-size: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 12px;
+}

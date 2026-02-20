@@ -1,87 +1,132 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { createClient } from "@supabase/supabase-js";
-import { supabaseServer } from "@/lib/supabase/server";
-
-function getToken(req: Request) {
-  const h = req.headers.get("authorization") || "";
-  if (!h.toLowerCase().startsWith("bearer ")) return null;
-  return h.slice(7).trim();
+function getToken(req: NextRequest) {
+  const auth = req.headers.get("authorization") || "";
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  return m?.[1] || null;
 }
 
-async function requireUser(req: Request) {
+function sbAuthed(token: string) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  return createClient(url, anon, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { persistSession: false },
+  });
+}
+
+async function requireUser(req: NextRequest) {
   const token = getToken(req);
-  if (!token) return null;
+  if (!token) {
+    return { ok: false as const, status: 401, error: "Missing bearer token" };
+  }
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_KEY;
+  const supabase = sbAuthed(token);
+  const { data: u, error: uerr } = await supabase.auth.getUser(token);
 
-  if (!url || !anon) return null;
+  if (uerr || !u?.user) {
+    return { ok: false as const, status: 401, error: "Unauthorized" };
+  }
 
-  const sbAuth = createClient(url, anon, { auth: { persistSession: false } });
-  const { data, error } = await sbAuth.auth.getUser(token);
-  if (error || !data?.user) return null;
-
-  return data.user;
+  return { ok: true as const, token, supabase, user: u.user };
 }
 
-const CreateCompanySchema = z.object({
-  name: z.string().min(2).max(120),
-  address: z.string().max(200).optional().nullable(),
-});
-
-export async function GET(req: Request) {
+// GET /api/app/companies
+export async function GET(req: NextRequest) {
   try {
-    const user = await requireUser(req);
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requireUser(req);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
+    }
 
-    const sb = supabaseServer();
-    const { data, error } = await sb
+    // Trae todo lo que exista en companies (incluye rut/contact/logo_path si están en tu tabla)
+    const { data, error } = await auth.supabase
       .from("companies")
-      .select("id, name, address, created_at")
-      .eq("owner_id", user.id)
+      .select("*")
       .order("created_at", { ascending: false });
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, companies: data ?? [] });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    return NextResponse.json({ companies: data ?? [] });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Error interno" }, { status: 500 });
+    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
+// POST /api/app/companies
+export async function POST(req: NextRequest) {
   try {
-    const user = await requireUser(req);
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const body = await req.json().catch(() => null);
-    const parsed = CreateCompanySchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+    const auth = await requireUser(req);
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status });
     }
 
-    const name = parsed.data.name.trim();
-    const addressRaw = (parsed.data.address ?? "").trim();
-    const address = addressRaw.length ? addressRaw : null;
+    const body = await req.json().catch(() => ({}));
 
-    const sb = supabaseServer();
-    const { data, error } = await sb
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) {
+      return NextResponse.json({ error: "Nombre empresa es obligatorio" }, { status: 400 });
+    }
+
+    // Campos opcionales (si existen en tu tabla)
+    const address =
+      typeof body.address === "string" && body.address.trim() ? body.address.trim() : null;
+
+    const rut = typeof body.rut === "string" && body.rut.trim() ? body.rut.trim() : null;
+
+    const contact_name =
+      typeof body.contact_name === "string" && body.contact_name.trim()
+        ? body.contact_name.trim()
+        : null;
+
+    const contact_rut =
+      typeof body.contact_rut === "string" && body.contact_rut.trim()
+        ? body.contact_rut.trim()
+        : null;
+
+    const contact_email =
+      typeof body.contact_email === "string" && body.contact_email.trim()
+        ? body.contact_email.trim()
+        : null;
+
+    const contact_phone =
+      typeof body.contact_phone === "string" && body.contact_phone.trim()
+        ? body.contact_phone.trim()
+        : null;
+
+    // OJO: guardamos SOLO el path dentro del bucket, ejemplo: "companies/<id>/logo.png"
+    const logo_path =
+      typeof body.logo_path === "string" && body.logo_path.trim() ? body.logo_path.trim() : null;
+
+    const insertRow: any = {
+      name,
+      address,
+      rut,
+      contact_name,
+      contact_rut,
+      contact_email,
+      contact_phone,
+      logo_path,
+    };
+
+    const { data, error } = await auth.supabase
       .from("companies")
-      .insert({
-        owner_id: user.id,
-        name,
-        address,
-      })
-      .select("id, name, address, created_at")
+      .insert(insertRow)
+      .select("*")
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, company: data });
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
+    return NextResponse.json({ company: data });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Error interno" }, { status: 500 });
+    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }
 }
