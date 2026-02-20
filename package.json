@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "dev:desktop": "concurrently -k \"npm run dev\" \"wait-on http://localhost:3000 && electron .\"",
     "build": "next build",
     "prep:standalone": "node electron/scripts/prep-standalone.mjs",

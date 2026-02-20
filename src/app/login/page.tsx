@@ -11,24 +11,30 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleLogin() {
+    if (loading) return;
+
     setErr(null);
     setLoading(true);
 
-    const { error } = await supabaseBrowser.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    try {
+      const { error } = await supabaseBrowser.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    setLoading(false);
+      if (error) {
+        setErr(error.message);
+        setLoading(false);
+        return;
+      }
 
-    if (error) {
-      setErr(error.message);
-      return;
+      setLoading(false);
+      router.replace("/app");
+    } catch (e: any) {
+      setLoading(false);
+      setErr(e?.message || "Error inesperado al iniciar sesión");
     }
-
-    router.replace("/app");
   }
 
   return (
@@ -42,7 +48,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form onSubmit={onSubmit} className="mt-5 space-y-3">
+        <div className="mt-5 space-y-3">
           <input
             className="w-full rounded-lg border px-3 py-2"
             placeholder="correo@ejemplo.com"
@@ -59,15 +65,20 @@ export default function LoginPage() {
             type="password"
             autoComplete="current-password"
             required
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleLogin();
+            }}
           />
 
           <button
+            type="button"
+            onClick={handleLogin}
             disabled={loading}
             className="w-full rounded-lg bg-emerald-500 py-2 font-semibold text-white disabled:opacity-60"
           >
             {loading ? "Entrando..." : "Entrar"}
           </button>
-        </form>
+        </div>
 
         <div className="mt-4 text-sm">
           ¿No tienes cuenta?{" "}
