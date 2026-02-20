@@ -11,7 +11,7 @@ export default function HomePage() {
             <ShieldCheck className="h-6 w-6 text-emerald-200" />
           </div>
           <div>
-            <div className="text-xl font-semibold">Prevención QR</div>
+            <div className="text-xl font-semibold">LZ Capacita QR</div>
             <div className="text-xs text-white/70">Registro y PDF con firmas</div>
           </div>
         </div>
@@ -39,7 +39,7 @@ export default function HomePage() {
           </Link>
 
           <Link
-            href="/register"
+            href="/signup"
             className="block text-center rounded-xl border border-white/20 bg-white/10 py-3 font-semibold hover:bg-white/15 transition"
           >
             Crear cuenta

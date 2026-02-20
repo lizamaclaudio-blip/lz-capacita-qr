@@ -129,7 +129,7 @@ export default function AppHome() {
         <div className="flex gap-2">
           {isAdmin && (
             <a
-              href="/admin"
+              href="/admin/new"
               className="rounded-lg border px-3 py-2 text-sm bg-white"
             >
               Ir a Admin
