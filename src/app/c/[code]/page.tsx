@@ -198,7 +198,9 @@ export default function PublicCheckinPage() {
             <div className={styles.sigWrap}>
               {mounted ? (
                 <SignatureCanvas
-                  ref={(r) => (sigRef.current = r)}
+                  ref={(r) => {
+  sigRef.current = r;
+}}
                   canvasProps={{
                     width: 900,
                     height: 220,
