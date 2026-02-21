@@ -8,7 +8,6 @@ import path from "path";
 import { readFile } from "fs/promises";
 
 const BodySchema = z.object({
-  passcode: z.string(),
   code: z.string().min(3),
 });
 
@@ -25,11 +24,8 @@ function clampText(text: string, max: number) {
   return t.length > max ? t.slice(0, max - 1) + "…" : t;
 }
 
-// ✅ Normalizar y formatear RUT
 function normalizeRut(rut: any) {
-  return String(rut ?? "")
-    .replace(/[^0-9kK]/g, "")
-    .toUpperCase();
+  return String(rut ?? "").replace(/[^0-9kK]/g, "").toUpperCase();
 }
 
 function formatRutPretty(rut: any) {
@@ -42,7 +38,6 @@ function formatRutPretty(rut: any) {
   return `${num}-${dv}`;
 }
 
-// ✅ Fecha y hora separadas (2 líneas)
 function formatDateParts(d: any) {
   try {
     if (!d) return { date: "-", time: "-" };
@@ -76,7 +71,6 @@ function formatDateFull(d: any) {
   }
 }
 
-// ✅ Wrap de texto para celdas
 function wrapLines(text: string, font: any, size: number, maxWidth: number) {
   const words = String(text ?? "").split(/\s+/).filter(Boolean);
   const lines: string[] = [];
@@ -85,9 +79,8 @@ function wrapLines(text: string, font: any, size: number, maxWidth: number) {
   for (const w of words) {
     const candidate = line ? `${line} ${w}` : w;
     const width = font.widthOfTextAtSize(candidate, size);
-    if (width <= maxWidth) {
-      line = candidate;
-    } else {
+    if (width <= maxWidth) line = candidate;
+    else {
       if (line) lines.push(line);
       line = w;
     }
@@ -111,10 +104,6 @@ export async function POST(req: Request) {
     const parsed = BodySchema.safeParse(json);
     if (!parsed.success) return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
 
-    if (parsed.data.passcode !== process.env.ADMIN_PASSCODE) {
-      return NextResponse.json({ error: "Passcode incorrecto" }, { status: 401 });
-    }
-
     const code = parsed.data.code.toUpperCase().trim();
     const sb = supabaseServer();
 
@@ -122,21 +111,20 @@ export async function POST(req: Request) {
     const { data: session, error: sErr } = await sb
       .from("sessions")
       .select(
-        "id, code, topic, location, session_date, trainer_name, status, closed_at, trainer_signature_path, companies(name, address)"
+        "id, code, topic, location, session_date, trainer_name, status, closed_at, trainer_signature_path, pdf_path, companies(name, address)"
       )
       .eq("code", code)
       .single();
 
     if (sErr || !session) return NextResponse.json({ error: "Charla no existe" }, { status: 404 });
 
-    if (session.status !== "closed") {
+    if ((session as any).status !== "closed") {
       return NextResponse.json(
         { error: "Primero debes cerrar la charla con firma del relator." },
         { status: 409 }
       );
     }
 
-    // ✅ FIX: companies viene como ARRAY en muchos casos (por el join)
     const company = Array.isArray((session as any).companies)
       ? (session as any).companies[0]
       : (session as any).companies;
@@ -169,7 +157,7 @@ export async function POST(req: Request) {
     const margin = 36;
     const contentW = pageW - margin * 2;
 
-    // ✅ Logo emisor (tu marca) - intenta brand primero, luego fallback al antiguo
+    // Logo marca
     let brandLogo: any = null;
     try {
       const logoPathNew = path.join(process.cwd(), "public", "brand", "logo-horizontal.png");
@@ -208,13 +196,13 @@ export async function POST(req: Request) {
       });
     };
 
-    // ===== HEADER ENCUADRADO =====
+    // HEADER
     const headerH = 90;
     const headerBottom = y - headerH;
     drawBox(margin, headerBottom, contentW, headerH, 1);
 
     if (brandLogo) {
-      const logoH = 52; // más horizontal
+      const logoH = 52;
       const logoW = (brandLogo.width / brandLogo.height) * logoH;
 
       page.drawImage(brandLogo, {
@@ -225,13 +213,12 @@ export async function POST(req: Request) {
       });
     }
 
-    const titleX = brandLogo ? margin + 12 : margin + 12; // dejamos margen consistente
     const leftX = margin + 12;
     const rightX = margin + contentW * 0.62;
 
     y = headerBottom + headerH - 22;
     page.drawText("REGISTRO DE ASISTENCIA – CHARLA", {
-      x: brandLogo ? margin + 12 + 220 : titleX,
+      x: brandLogo ? margin + 12 + 220 : margin + 12,
       y,
       size: 14,
       font: fontBold,
@@ -256,7 +243,7 @@ export async function POST(req: Request) {
 
     y = headerBottom - 18;
 
-    // ===== TABLA =====
+    // TABLA
     const col = {
       n: 20,
       nombre: 165,
@@ -326,34 +313,20 @@ export async function POST(req: Request) {
 
     for (let i = 0; i < (attendees?.length ?? 0); i++) {
       ensureSpace(rowH);
-
       const a: any = attendees![i];
 
-      // fila
       drawBox(x0, y - rowH, contentW, rowH, 1);
 
-      // columnas
       drawLine(xNombre, y, xNombre, y - rowH);
       drawLine(xRut, y, xRut, y - rowH);
       drawLine(xCargo, y, xCargo, y - rowH);
       drawLine(xHora, y, xHora, y - rowH);
       drawLine(xFirma, y, xFirma, y - rowH);
 
-      // N°
       page.drawText(String(i + 1), { x: xN + 6, y: y - 16, size: 9, font });
-
-      // Nombre
-      page.drawText(clampText(a.full_name ?? "", 30), {
-        x: xNombre + 6,
-        y: y - 16,
-        size: 9,
-        font,
-      });
-
-      // RUT
+      page.drawText(clampText(a.full_name ?? "", 30), { x: xNombre + 6, y: y - 16, size: 9, font });
       page.drawText(formatRutPretty(a.rut), { x: xRut + 6, y: y - 16, size: 9, font });
 
-      // Cargo en 2 líneas (wrap)
       const cargoX = xCargo + 6;
       const cargoW = col.cargo - 12;
       const cargoSize = 8;
@@ -366,21 +339,12 @@ export async function POST(req: Request) {
       }
 
       page.drawText(cargoLines[0], { x: cargoX, y: y - 16, size: cargoSize, font });
-      if (cargoLines[1]) {
-        page.drawText(cargoLines[1], {
-          x: cargoX,
-          y: y - 16 - cargoLineH,
-          size: cargoSize,
-          font,
-        });
-      }
+      if (cargoLines[1]) page.drawText(cargoLines[1], { x: cargoX, y: y - 16 - cargoLineH, size: cargoSize, font });
 
-      // Hora en 2 líneas (fecha arriba / hora abajo)
       const { date, time } = formatDateParts(a.created_at);
       page.drawText(clampText(date, 14), { x: xHora + 6, y: y - 16, size: 8, font });
       page.drawText(clampText(time, 10), { x: xHora + 6, y: y - 32, size: 8, font });
 
-      // Firma (sin cuadro interior)
       const sigAreaX = xFirma + 6;
       const sigAreaW = col.firma - 12;
       const sigAreaH = rowH - 18;
@@ -402,18 +366,13 @@ export async function POST(req: Request) {
           height: h,
         });
       } catch {
-        page.drawText("Sin firma", {
-          x: sigAreaX + 8,
-          y: sigAreaY + sigAreaH / 2 - 4,
-          size: 8,
-          font,
-        });
+        page.drawText("Sin firma", { x: sigAreaX + 8, y: sigAreaY + sigAreaH / 2 - 4, size: 8, font });
       }
 
       y -= rowH;
     }
 
-    // ===== FIRMA RELATOR =====
+    // Firma relator
     ensureSpace(150);
 
     page.drawText("Firma relator:", { x: margin, y: y - 14, size: 11, font: fontBold });
@@ -449,7 +408,7 @@ export async function POST(req: Request) {
     y = relBoxY - 18;
     page.drawText(`Relator: ${(session as any).trainer_name ?? ""}`, { x: margin, y, size: 10, font });
 
-    // ===== Subir PDF a Storage y devolver link =====
+    // Subir PDF
     const pdfBytes = await pdfDoc.save();
     const pdfPath = `reports/${code}/registro-${Date.now()}.pdf`;
 
@@ -459,6 +418,14 @@ export async function POST(req: Request) {
     });
 
     if (up.error) return NextResponse.json({ error: up.error.message }, { status: 500 });
+
+    // ✅ Guardar pdf_path en sessions (esto habilita el estado "PDF generado")
+    const { error: updErr } = await sb
+      .from("sessions")
+      .update({ pdf_path: pdfPath, pdf_generated_at: new Date().toISOString() })
+      .eq("id", (session as any).id);
+
+    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
     const { data: signed, error: signErr } = await sb.storage.from("assets").createSignedUrl(pdfPath, 60 * 60);
     if (signErr || !signed) {

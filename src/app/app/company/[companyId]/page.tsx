@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import styles from "./page.module.css";
@@ -41,6 +41,10 @@ function fmtDateTimeCL(iso: string | null | undefined) {
   }
 }
 
+function safeUpper(s: string) {
+  return (s ?? "").toUpperCase();
+}
+
 export default function CompanyPage() {
   const router = useRouter();
   const params = useParams<{ companyId: string }>();
@@ -62,32 +66,101 @@ export default function CompanyPage() {
   // post-create card
   const [justCreated, setJustCreated] = useState<JustCreated | null>(null);
 
+  // search in sessions list
+  const [q, setQ] = useState("");
+
+  // auto open qr toggle
+  const [autoOpenQr, setAutoOpenQr] = useState(false);
+
+  // cache token en memoria (evita “rebotes”)
+  const [token, setToken] = useState<string | null>(null);
+  const tokenRef = useRef<string | null>(null);
+
   const baseUrl = useMemo(() => {
-    // para copiar links completos (funciona en localhost y en producción)
     if (typeof window === "undefined") return "";
     return window.location.origin;
   }, []);
 
-  async function getTokenOrRedirect() {
-    const { data } = await supabaseBrowser.auth.getSession();
-    const token = data.session?.access_token;
+  // Persist toggle (localStorage)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("lz_auto_open_qr");
+      if (raw === "1") setAutoOpenQr(true);
+      if (raw === "0") setAutoOpenQr(false);
+    } catch {}
+  }, []);
 
-    if (!token) {
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem("lz_auto_open_qr", autoOpenQr ? "1" : "0");
+    } catch {}
+  }, [autoOpenQr]);
+
+  // Mantener token estable
+  useEffect(() => {
+    let alive = true;
+
+    async function boot() {
+      const { data } = await supabaseBrowser.auth.getSession();
+      const t = data.session?.access_token ?? null;
+
+      if (!alive) return;
+
+      if (!t) {
+        router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
+        return;
+      }
+
+      setToken(t);
+      tokenRef.current = t;
+    }
+
+    boot();
+
+    const { data: sub } = supabaseBrowser.auth.onAuthStateChange((_event, session) => {
+      const t = session?.access_token ?? null;
+      setToken(t);
+      tokenRef.current = t;
+
+      if (!t) {
+        router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
+      }
+    });
+
+    return () => {
+      alive = false;
+      sub?.subscription?.unsubscribe();
+    };
+  }, [router]);
+
+  async function ensureTokenOrRedirect() {
+    const cached = tokenRef.current ?? token;
+    if (cached) return cached;
+
+    const { data } = await supabaseBrowser.auth.getSession();
+    const t = data.session?.access_token ?? null;
+
+    if (!t) {
       router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
       return null;
     }
-    return token;
+
+    setToken(t);
+    tokenRef.current = t;
+    return t;
   }
 
   async function apiFetch<T>(url: string, init: RequestInit = {}) {
-    const token = await getTokenOrRedirect();
-    if (!token) return null as any;
+    const t = await ensureTokenOrRedirect();
+    if (!t) return null as any;
 
     const res = await fetch(url, {
       ...init,
       headers: {
         ...(init.headers ?? {}),
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${t}`,
       },
       cache: "no-store",
     });
@@ -100,9 +173,7 @@ export default function CompanyPage() {
     const json = (await res.json().catch(() => null)) as T | null;
 
     if (!res.ok) {
-      const msg =
-        (json as any)?.error ||
-        `Error HTTP ${res.status} al consultar la API.`;
+      const msg = (json as any)?.error || `Error HTTP ${res.status} al consultar la API.`;
       throw new Error(msg);
     }
 
@@ -110,13 +181,13 @@ export default function CompanyPage() {
   }
 
   async function loadAll() {
+    if (!companyId) return;
+
     setLoading(true);
     setError(null);
 
     try {
-      const cJson = await apiFetch<{ company: Company | null }>(
-        `/api/app/companies/${companyId}`
-      );
+      const cJson = await apiFetch<{ company: Company | null }>(`/api/app/companies/${companyId}`);
       setCompany(cJson?.company ?? null);
 
       const sJson = await apiFetch<{ sessions: SessionRow[] }>(
@@ -134,19 +205,43 @@ export default function CompanyPage() {
 
   useEffect(() => {
     if (!companyId) return;
+    if (!token) return;
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId]);
+  }, [companyId, token]);
 
   async function copyText(text: string, okMsg = "Copiado ✅") {
     try {
       await navigator.clipboard.writeText(text);
       setNotice(okMsg);
-      window.setTimeout(() => setNotice(null), 1600);
+      window.setTimeout(() => setNotice(null), 1500);
     } catch {
       setNotice("No pude copiar (permiso del navegador).");
       window.setTimeout(() => setNotice(null), 1800);
     }
+  }
+
+  function openSessionAdmin(code: string) {
+    router.push(`/admin/s/${encodeURIComponent(code)}`);
+  }
+
+  function openSessionAdminNewTab(code: string) {
+    window.open(`/admin/s/${encodeURIComponent(code)}`, "_blank", "noopener,noreferrer");
+  }
+
+  function openPublicCheckin(code: string) {
+    window.open(`/c/${encodeURIComponent(code)}`, "_blank", "noopener,noreferrer");
+  }
+
+  async function copyAllFor(code: string) {
+    const up = safeUpper(code);
+    const qr = baseUrl ? `${baseUrl}/c/${encodeURIComponent(up)}` : `/c/${encodeURIComponent(up)}`;
+    const admin = baseUrl
+      ? `${baseUrl}/admin/s/${encodeURIComponent(up)}`
+      : `/admin/s/${encodeURIComponent(up)}`;
+
+    const blob = `Código: ${up}\nQR: ${qr}\nAdmin: ${admin}`;
+    await copyText(blob, "✅ Copié código + links");
   }
 
   async function createSession() {
@@ -159,20 +254,30 @@ export default function CompanyPage() {
       return;
     }
 
-    const token = await getTokenOrRedirect();
-    if (!token) return;
+    const t = await ensureTokenOrRedirect();
+    if (!t) return;
+
+    // ✅ Anti popup-blocker:
+    // si autoOpenQr = true, abrimos la pestaña "en blanco" inmediatamente (dentro del click)
+    // y después (cuando ya tengamos code) la redirigimos.
+    let qrTab: Window | null = null;
+    if (autoOpenQr && typeof window !== "undefined") {
+      qrTab = window.open("about:blank", "_blank", "noopener,noreferrer");
+    }
 
     setCreating(true);
 
     try {
+      const topicSnapshot = topic.trim(); // guardar antes de limpiar
+
       const res = await fetch(`/api/app/companies/${companyId}/sessions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${t}`,
         },
         body: JSON.stringify({
-          topic: topic.trim(),
+          topic: topicSnapshot,
           location: location.trim() ? location.trim() : null,
           trainer_name: trainerName.trim(),
           session_date: sessionDate ? new Date(sessionDate).toISOString() : null,
@@ -188,15 +293,12 @@ export default function CompanyPage() {
 
       if (!res.ok) {
         setError(json?.error || "No se pudo crear la charla");
+        // si abrimos tab y falló, la cerramos
+        try { qrTab?.close(); } catch {}
         return;
       }
 
-      // Intenta tomar el code de distintas formas, según tu API.
-      const code =
-        json?.code ||
-        json?.session?.code ||
-        json?.data?.code ||
-        null;
+      const codeRaw: string | null = json?.code || json?.session?.code || json?.data?.code || null;
 
       // limpiar form
       setTopic("");
@@ -206,40 +308,52 @@ export default function CompanyPage() {
 
       await loadAll();
 
-      if (code) {
+      if (codeRaw) {
+        const code = safeUpper(codeRaw);
+
         const publicPath = `/c/${encodeURIComponent(code)}`;
         const adminPath = `/admin/s/${encodeURIComponent(code)}`;
 
+        const publicUrl = baseUrl ? `${baseUrl}${publicPath}` : publicPath;
+        const adminUrl = baseUrl ? `${baseUrl}${adminPath}` : adminPath;
+
         setJustCreated({
           code,
-          topic: (json?.session?.topic ?? topic.trim()) || "Charla creada",
-          publicUrl: baseUrl ? `${baseUrl}${publicPath}` : publicPath,
-          adminUrl: baseUrl ? `${baseUrl}${adminPath}` : adminPath,
+          topic: json?.session?.topic ?? topicSnapshot ?? "Charla creada",
+          publicUrl,
+          adminUrl,
         });
 
         setNotice("Charla creada ✅");
-        window.setTimeout(() => setNotice(null), 1600);
+        window.setTimeout(() => setNotice(null), 1500);
+
+        // ✅ auto open QR (redirige la pestaña pre-abierta)
+        if (autoOpenQr) {
+          if (qrTab) {
+            try {
+              qrTab.location.href = publicPath;
+            } catch {
+              // fallback
+              openPublicCheckin(code);
+            }
+          } else {
+            openPublicCheckin(code);
+          }
+        }
       } else {
         setNotice("Charla creada ✅ (no recibí el código en la respuesta)");
         window.setTimeout(() => setNotice(null), 2000);
+        try { qrTab?.close(); } catch {}
       }
     } catch (e: any) {
       setError(e?.message || "No se pudo crear la charla");
+      try { qrTab?.close(); } catch {}
     } finally {
       setCreating(false);
     }
   }
 
-  function openSessionAdmin(code: string) {
-    router.push(`/admin/s/${encodeURIComponent(code)}`);
-  }
-
-  function openPublicCheckin(code: string) {
-    window.open(`/c/${encodeURIComponent(code)}`, "_blank", "noopener,noreferrer");
-  }
-
   const sortedSessions = useMemo(() => {
-    // orden: más nuevas arriba por created_at / session_date
     const copy = [...sessions];
     copy.sort((a, b) => {
       const ad = new Date(a.created_at ?? a.session_date ?? 0).getTime();
@@ -249,6 +363,19 @@ export default function CompanyPage() {
     return copy;
   }, [sessions]);
 
+  const filteredSessions = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    if (!term) return sortedSessions;
+
+    return sortedSessions.filter((s) => {
+      const t = (s.topic ?? "").toLowerCase();
+      const c = (s.code ?? "").toLowerCase();
+      const tr = (s.trainer_name ?? "").toLowerCase();
+      const loc = (s.location ?? "").toLowerCase();
+      return t.includes(term) || c.includes(term) || tr.includes(term) || loc.includes(term);
+    });
+  }, [q, sortedSessions]);
+
   const companyTitle = company?.name || "Empresa";
   const companySub = company?.address ? company.address : "Sin dirección";
 
@@ -257,12 +384,8 @@ export default function CompanyPage() {
       {/* Header */}
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <button
-            type="button"
-            onClick={() => router.push("/app")}
-            className={styles.back}
-          >
-            ← Volver
+          <button type="button" onClick={() => router.push("/app/companies")} className={styles.back}>
+            ← Volver a empresas
           </button>
 
           <h1 className={styles.h1}>{companyTitle}</h1>
@@ -272,13 +395,11 @@ export default function CompanyPage() {
         </div>
 
         <div className={styles.headerRight}>
-          <button
-            type="button"
-            className={styles.ghostBtn}
-            onClick={loadAll}
-            disabled={loading}
-            title="Recargar"
-          >
+          <button type="button" className={styles.ghostBtn} onClick={() => router.push("/app/sessions")}>
+            📋 Mis charlas
+          </button>
+
+          <button type="button" className={styles.ghostBtn} onClick={loadAll} disabled={loading}>
             {loading ? "Cargando…" : "Actualizar"}
           </button>
         </div>
@@ -295,26 +416,28 @@ export default function CompanyPage() {
             <div>
               <div className={styles.quickTitle}>Charla lista ✅</div>
               <div className={styles.quickSub}>
-                Código: <span className={styles.mono}>{justCreated.code}</span>
+                Código: <span className={styles.mono}>{safeUpper(justCreated.code)}</span>
                 {justCreated.topic ? ` · ${justCreated.topic}` : ""}
               </div>
             </div>
 
-            <button
-              type="button"
-              className={styles.copyBtn}
-              onClick={() => copyText(justCreated.code, "Código copiado ✅")}
-            >
-              Copiar código
-            </button>
+            <div className={styles.quickTopBtns}>
+              <button
+                type="button"
+                className={styles.copyBtn}
+                onClick={() => copyText(justCreated.code, "Código copiado ✅")}
+              >
+                Copiar código
+              </button>
+
+              <button type="button" className={styles.copyBtn} onClick={() => copyAllFor(justCreated.code)}>
+                Copiar todo
+              </button>
+            </div>
           </div>
 
           <div className={styles.quickActions}>
-            <button
-              type="button"
-              className={styles.primaryBtn}
-              onClick={() => openPublicCheckin(justCreated.code)}
-            >
+            <button type="button" className={styles.primaryBtn} onClick={() => openPublicCheckin(justCreated.code)}>
               Abrir QR (público)
             </button>
 
@@ -326,13 +449,32 @@ export default function CompanyPage() {
               Copiar link QR
             </button>
 
-            <button
-              type="button"
-              className={styles.darkBtn}
-              onClick={() => openSessionAdmin(justCreated.code)}
-            >
+            <button type="button" className={styles.darkBtn} onClick={() => openSessionAdmin(justCreated.code)}>
               Admin
             </button>
+
+            <button type="button" className={styles.secondaryBtn} onClick={() => openSessionAdminNewTab(justCreated.code)}>
+              Admin (nueva pestaña)
+            </button>
+
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              onClick={() => copyText(justCreated.adminUrl, "Link Admin copiado ✅")}
+            >
+              Copiar link Admin
+            </button>
+          </div>
+
+          <div className={styles.quickToggles}>
+            <label className={styles.toggle}>
+              <input
+                type="checkbox"
+                checked={autoOpenQr}
+                onChange={(e) => setAutoOpenQr(e.target.checked)}
+              />
+              Auto-abrir QR al crear
+            </label>
           </div>
 
           <div className={styles.quickLinks}>
@@ -398,12 +540,7 @@ export default function CompanyPage() {
             />
           </div>
 
-          <button
-            type="button"
-            disabled={creating}
-            onClick={createSession}
-            className={styles.createBtn}
-          >
+          <button type="button" disabled={creating} onClick={createSession} className={styles.createBtn}>
             {creating ? "Creando…" : "Crear charla"}
           </button>
         </div>
@@ -415,20 +552,33 @@ export default function CompanyPage() {
           <div>
             <div className={styles.cardTitle}>Charlas</div>
             <div className={styles.cardSub}>
-              {loading ? "Cargando…" : `${sortedSessions.length} charla(s)`}
+              {loading ? "Cargando…" : `${filteredSessions.length} charla(s)`}
             </div>
           </div>
+
+          <input
+            className={styles.search}
+            placeholder="Buscar por tema, código, relator o lugar…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
         </div>
 
         {loading ? (
           <div className={styles.empty}>Cargando…</div>
-        ) : !sortedSessions.length ? (
-          <div className={styles.empty}>Aún no has creado charlas.</div>
+        ) : !filteredSessions.length ? (
+          <div className={styles.empty}>Aún no hay charlas (o tu búsqueda no tiene resultados).</div>
         ) : (
           <div className={styles.grid}>
-            {sortedSessions.map((s) => {
+            {filteredSessions.map((s) => {
               const status = (s.status ?? "").toLowerCase();
               const isClosed = status === "closed" || !!s.closed_at;
+
+              const code = safeUpper(s.code);
+              const publicUrl = baseUrl ? `${baseUrl}/c/${encodeURIComponent(code)}` : `/c/${encodeURIComponent(code)}`;
+              const adminUrl = baseUrl
+                ? `${baseUrl}/admin/s/${encodeURIComponent(code)}`
+                : `/admin/s/${encodeURIComponent(code)}`;
 
               return (
                 <div key={s.id} className={styles.sessionCard}>
@@ -436,7 +586,7 @@ export default function CompanyPage() {
                     <div>
                       <div className={styles.sessionTitle}>{s.topic || "(Sin tema)"}</div>
                       <div className={styles.metaLine}>
-                        Código: <span className={styles.mono}>{s.code}</span>
+                        Código: <span className={styles.mono}>{code}</span>
                       </div>
                     </div>
 
@@ -461,38 +611,31 @@ export default function CompanyPage() {
                   </div>
 
                   <div className={styles.sessionActions}>
-                    <button
-                      type="button"
-                      className={styles.darkBtn}
-                      onClick={() => openSessionAdmin(s.code)}
-                    >
+                    <button type="button" className={styles.darkBtn} onClick={() => openSessionAdmin(code)}>
                       Admin
                     </button>
 
-                    <button
-                      type="button"
-                      className={styles.secondaryBtn}
-                      onClick={() => openPublicCheckin(s.code)}
-                    >
+                    <button type="button" className={styles.secondaryBtn} onClick={() => openPublicCheckin(code)}>
                       Abrir QR
                     </button>
 
-                    <button
-                      type="button"
-                      className={styles.copyBtn}
-                      onClick={() =>
-                        copyText(
-                          baseUrl ? `${baseUrl}/c/${s.code}` : `/c/${s.code}`,
-                          "Link QR copiado ✅"
-                        )
-                      }
-                    >
-                      Copiar link
+                    <button type="button" className={styles.copyBtn} onClick={() => copyText(publicUrl, "Link QR copiado ✅")}>
+                      Copiar QR
+                    </button>
+
+                    <button type="button" className={styles.copyBtn} onClick={() => copyText(adminUrl, "Link Admin copiado ✅")}>
+                      Copiar Admin
+                    </button>
+
+                    <button type="button" className={styles.copyBtn} onClick={() => copyAllFor(code)}>
+                      Copiar todo
                     </button>
                   </div>
 
                   <div className={styles.linkHint}>
-                    Público: <span className={styles.mono}>/c/{s.code}</span>
+                    Público: <span className={styles.mono}>/c/{code}</span>
+                    <span className={styles.dot}>•</span>
+                    Admin: <span className={styles.mono}>/admin/s/{code}</span>
                   </div>
                 </div>
               );

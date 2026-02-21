@@ -1,105 +1,123 @@
-.sidebar {
-  width: 320px;
-  min-width: 320px;
-  padding: 18px;
-  color: #eaf3ff;
-  background: radial-gradient(1200px 600px at 20% -10%, rgba(80, 200, 255, 0.25), transparent 60%),
-    linear-gradient(180deg, #0b1b2c, #061523);
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
-  position: sticky;
-  top: 0;
-  height: 100vh;
-}
-
-.brandCard {
-  border-radius: 18px;
+.sidebar{
+  width: 280px;
+  min-height: calc(100vh - 24px);
+  margin: 12px;
+  border-radius: 22px;
   padding: 14px;
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  display:flex;
+  flex-direction:column;
+
+  background:
+    radial-gradient(700px 360px at 30% 0%, rgba(255,255,255,0.10), transparent 60%),
+    linear-gradient(180deg, #0b2230 0%, #071821 55%, #06131a 100%);
+  box-shadow: 0 18px 50px rgba(0,0,0,.25);
+  border: 1px solid rgba(255,255,255,.08);
 }
 
-.brandLogo {
-  width: 100%;
-  height: 86px;
-  object-fit: contain;
-  display: block;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
+.brand{
+  display:flex;
+  gap:10px;
+  padding: 10px;
+  border-radius: 18px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.10);
+  align-items:center;
 }
 
-.brandTitle {
-  margin-top: 12px;
-  font-weight: 800;
-  font-size: 18px;
-  letter-spacing: 0.2px;
-}
-
-.brandSub {
-  margin-top: 4px;
-  opacity: 0.75;
-  font-size: 13px;
-}
-
-.nav {
-  margin-top: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.navItem {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 12px;
-  border-radius: 16px;
-  text-decoration: none;
-  color: #eaf3ff;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  transition: transform 0.12s ease, background 0.12s ease, border 0.12s ease;
-}
-
-.navItem:hover {
-  transform: translateY(-1px);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-}
-
-.active {
-  background: linear-gradient(90deg, rgba(16, 185, 129, 0.26), rgba(16, 185, 129, 0.12));
-  border: 1px solid rgba(16, 185, 129, 0.35);
-}
-
-.iconWrap {
-  width: 44px;
-  height: 44px;
+.brandLogoWrap{
+  width: 78px;
+  height: 52px;
   border-radius: 14px;
-  display: grid;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow:hidden;
+  background: rgba(0,0,0,.22);
+  border: 1px solid rgba(255,255,255,.10);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex: 0 0 auto;
 }
 
-.icon {
-  width: 20px;
-  height: 20px;
-  opacity: 0.95;
+.brandLogo{
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display:block;
+  padding: 6px;
 }
 
-.label {
-  font-weight: 700;
-  font-size: 15px;
+.brandText{ display:flex; flex-direction:column; gap:2px; }
+.brandTitle{ color:#fff; font-weight:950; font-size:16px; line-height:1.1; }
+.brandSub{ color: rgba(255,255,255,.72); font-size:12px; font-weight:800; }
+
+.nav{
+  margin-top: 12px;
+  display:flex;
+  flex-direction:column;
+  gap: 8px;
+
+  /* ✅ clave: el menú scrollea si no cabe */
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 6px;
 }
 
-.footer {
-  position: absolute;
-  left: 18px;
-  right: 18px;
-  bottom: 16px;
-  opacity: 0.65;
-  font-size: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  padding-top: 12px;
+.nav::-webkit-scrollbar{ width: 8px; }
+.nav::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.12);
+  border-radius: 999px;
+}
+.nav::-webkit-scrollbar-track{ background: transparent; }
+
+.item{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  padding: 10px 12px; /* ✅ más chico */
+  border-radius: 16px;
+  text-decoration:none;
+  color: rgba(255,255,255,.88);
+  background: rgba(255,255,255,.04);
+  border: 1px solid rgba(255,255,255,.08);
+  transition: transform .08s ease, background .15s ease, border-color .15s ease;
+}
+
+.item:hover{
+  background: rgba(255,255,255,.07);
+  border-color: rgba(255,255,255,.14);
+  transform: translateY(-1px);
+}
+
+.active{
+  background: rgba(29,191,115,.14);
+  border-color: rgba(29,191,115,.30);
+}
+
+.iconWrap{
+  width: 38px;  /* ✅ más chico */
+  height: 38px;
+  border-radius: 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background: rgba(0,0,0,.18);
+  border: 1px solid rgba(255,255,255,.10);
+  flex: 0 0 auto;
+}
+
+.icon{
+  width: 18px;
+  height: 18px;
+}
+
+.label{
+  font-weight: 900;
+  font-size: 13px; /* ✅ más chico */
+}
+
+.footer{
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,.08);
+  color: rgba(255,255,255,.55);
+  font-size: 11px;
 }

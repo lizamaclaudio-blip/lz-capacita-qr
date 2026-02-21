@@ -1,46 +1,76 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import styles from "./Topbar.module.css";
+import { IconLogout } from "./icons";
 
 type Props = {
-  title?: string;
-  subtitle?: string;
-  activePath?: string;
+  greetingName?: string | null;
   email?: string | null;
-  onLogout?: (() => void) | (() => Promise<void>);
-  right?: React.ReactNode;
+  subtitle?: string;
+  onLogout: () => void;
 };
 
-export default function Topbar({
-  title = "Panel",
-  subtitle,
-  activePath,
-  email,
-  onLogout,
-  right,
-}: Props) {
+function formatDateCL(d: Date) {
+  // ej: "vie, 21 feb 2026"
+  return new Intl.DateTimeFormat("es-CL", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  }).format(d);
+}
+
+function formatTimeCL(d: Date) {
+  // ej: "20:32"
+  return new Intl.DateTimeFormat("es-CL", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
+export default function Topbar({ greetingName, email, subtitle = "Panel LZ Capacita QR", onLogout }: Props) {
+  const [now, setNow] = useState<Date>(() => new Date());
+
+  // actualiza cada 30s (suficiente para reloj)
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const name = useMemo(() => {
+    const n = (greetingName ?? "").trim();
+    if (n) return n;
+    if (email) return email.split("@")[0] ?? "usuario";
+    return "usuario";
+  }, [greetingName, email]);
+
+  const dateStr = useMemo(() => formatDateCL(now), [now]);
+  const timeStr = useMemo(() => formatTimeCL(now), [now]);
+
   return (
-    <div className={styles.topbar}>
+    <header className={styles.topbar}>
       <div className={styles.left}>
-        {activePath ? <div className={styles.breadcrumb}>{activePath}</div> : null}
-        <div className={styles.title}>{title}</div>
-        {subtitle ? <div className={styles.subtitle}>{subtitle}</div> : null}
+        <div className={styles.titleRow}>
+          <div className={styles.title}>Hola, bienvenido {name} 👋</div>
+        </div>
+        <div className={styles.subtitle}>{subtitle}</div>
       </div>
 
       <div className={styles.right}>
-        {right ? (
-          right
-        ) : (
-          <>
-            {email ? <div className={styles.email}>{email}</div> : null}
-            {onLogout ? (
-              <button className={styles.logoutBtn} onClick={onLogout} type="button">
-                Salir
-              </button>
-            ) : null}
-          </>
-        )}
+        <div className={styles.datetime}>
+          <div className={styles.time}>{timeStr}</div>
+          <div className={styles.date}>{dateStr}</div>
+        </div>
+
+        {email && <div className={styles.email}>{email}</div>}
+
+        <button type="button" className={styles.logout} onClick={onLogout}>
+          <IconLogout className={styles.logoutIcon} />
+          <span>Salir</span>
+        </button>
       </div>
-    </div>
+    </header>
   );
 }

@@ -1,465 +1,363 @@
 "use client";
 
-import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import SignatureCanvas from "react-signature-canvas";
-import Image from "next/image";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import styles from "./page.module.css";
 
-type AdminPayload = {
-  session: any;
-  attendees: any[];
-};
+type Mode = "authed" | "passcode";
 
 export default function AdminSession() {
-  const router = useRouter();
   const params = useParams<{ code: string }>();
   const raw = (params?.code ?? "") as unknown as string | string[];
   const code = (Array.isArray(raw) ? raw[0] : raw).toUpperCase();
 
-  // Auth modes
+  const [mode, setMode] = useState<Mode>("passcode");
+
   const [token, setToken] = useState<string | null>(null);
-  const [showPasscode, setShowPasscode] = useState(false);
+  const tokenRef = useRef<string | null>(null);
+
   const [passcode, setPasscode] = useState("");
-
-  // Data
-  const [data, setData] = useState<AdminPayload | null>(null);
+  const [data, setData] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
-  // Signature
   const sigRef = useRef<SignatureCanvas | null>(null);
   const [mounted, setMounted] = useState(false);
 
-  // Closing
   const [closing, setClosing] = useState(false);
   const [closeMsg, setCloseMsg] = useState<string | null>(null);
 
-  // PDF
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfMsg, setPdfMsg] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
 
-  const baseUrl = useMemo(() => {
-    if (typeof window === "undefined") return "";
-    return window.location.origin;
-  }, []);
-
   useEffect(() => setMounted(true), []);
 
-  // Detecta sesión Supabase (para “modo sesión”)
+  useEffect(() => {
+    setPdfUrl(null);
+    setPdfMsg(null);
+    setData(null);
+    setErr(null);
+    setCloseMsg(null);
+  }, [code]);
+
   useEffect(() => {
     let alive = true;
 
-    (async () => {
+    async function boot() {
       const { data } = await supabaseBrowser.auth.getSession();
+      const t = data.session?.access_token ?? null;
+
       if (!alive) return;
-      setToken(data.session?.access_token ?? null);
-    })();
+
+      setToken(t);
+      tokenRef.current = t;
+      setMode(t ? "authed" : "passcode");
+    }
+
+    boot();
 
     const { data: sub } = supabaseBrowser.auth.onAuthStateChange((_evt, session) => {
-      if (!alive) return;
-      setToken(session?.access_token ?? null);
+      const t = session?.access_token ?? null;
+      setToken(t);
+      tokenRef.current = t;
+      setMode(t ? "authed" : "passcode");
     });
 
     return () => {
       alive = false;
-      sub.subscription.unsubscribe();
+      sub?.subscription?.unsubscribe();
     };
   }, []);
 
-  // Si cambia el código, limpiamos PDF + mensajes
-  useEffect(() => {
-    setPdfUrl(null);
-    setPdfMsg(null);
-    setErr(null);
-    setNotice(null);
-    setCloseMsg(null);
-    setData(null);
-  }, [code]);
-
-  async function copyText(text: string, okMsg = "Copiado ✅") {
-    try {
-      await navigator.clipboard.writeText(text);
-      setNotice(okMsg);
-      window.setTimeout(() => setNotice(null), 1600);
-    } catch {
-      setNotice("No pude copiar (permiso del navegador).");
-      window.setTimeout(() => setNotice(null), 1800);
-    }
-  }
-
-  function buildHeaders() {
-    const h: Record<string, string> = {};
-    if (token) h.Authorization = `Bearer ${token}`;
-    return h;
-  }
-
-  async function load() {
+  async function loadAuthed() {
     setErr(null);
 
-    // Permitimos cargar si hay token o si hay passcode
-    if (!token && !passcode) {
-      setErr("Ingresa passcode o inicia sesión para administrar.");
+    const t = tokenRef.current ?? token;
+    if (!t) {
+      setErr("No hay sesión activa. Usa passcode.");
+      setMode("passcode");
       return;
     }
 
-    const qs = new URLSearchParams({ code });
-    if (passcode) qs.set("passcode", passcode);
-
-    const res = await fetch(`/api/admin/attendees?${qs.toString()}`, {
-      headers: buildHeaders(),
+    const res = await fetch(`/api/app/admin/attendees?code=${encodeURIComponent(code)}`, {
+      headers: { Authorization: `Bearer ${t}` },
       cache: "no-store",
     });
 
     const json = await res.json().catch(() => null);
-
     if (!res.ok) {
-      // Mensaje amigable si tu API aún exige passcode
-      const msg = json?.error || "Error cargando asistentes";
-      setErr(msg);
-
-      // Si hay token pero API no lo acepta, sugerimos passcode
-      if (token && !passcode) {
-        setShowPasscode(true);
-        setNotice("Tu API parece requerir passcode. Ingresa passcode para continuar.");
-        window.setTimeout(() => setNotice(null), 2500);
-      }
+      setErr(json?.error || "No pude cargar por sesión. Usa passcode.");
+      setMode("passcode");
       return;
     }
 
-    setData(json as AdminPayload);
+    setData(json);
   }
 
-  // Auto-load en modo sesión (sin passcode) o modo passcode
-  useEffect(() => {
-    if (!code) return;
+  async function loadPasscode() {
+    setErr(null);
+    if (!passcode) return setErr("Falta passcode");
 
-    // Si tenemos token, intentamos cargar sin passcode
-    if (token) {
-      load();
-      const t = setInterval(load, 3000);
+    const res = await fetch(
+      `/api/admin/attendees?code=${encodeURIComponent(code)}&passcode=${encodeURIComponent(passcode)}`,
+      { cache: "no-store" }
+    );
+    const json = await res.json().catch(() => null);
+    if (!res.ok) return setErr(json?.error || "Error");
+    setData(json);
+  }
+
+  useEffect(() => {
+    if (mode === "authed") {
+      loadAuthed();
+      const t = setInterval(() => loadAuthed(), 3000);
       return () => clearInterval(t);
     }
 
-    // Si no hay token, usamos passcode (cuando exista)
     if (!passcode) return;
-    load();
-    const t = setInterval(load, 3000);
+    loadPasscode();
+    const t = setInterval(() => loadPasscode(), 3000);
     return () => clearInterval(t);
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, passcode, code]);
+  }, [mode, passcode, code]);
 
   async function closeSession() {
     setCloseMsg(null);
 
     const sig = sigRef.current;
-
-    // Reglas:
-    // - Si hay token, no exigimos passcode (ideal)
-    // - Si no hay token, exigimos passcode
-    if (!token && !passcode) return setCloseMsg("Falta passcode o sesión iniciada.");
     if (!sig || sig.isEmpty()) return setCloseMsg("Falta firma del relator 👇");
 
+    const trainer_signature_data_url = sig.getTrimmedCanvas().toDataURL("image/png");
     setClosing(true);
 
-    const trainer_signature_data_url = sig.getTrimmedCanvas().toDataURL("image/png");
+    try {
+      // ✅ AUTENTICADO: Bearer
+      if (mode === "authed" && (tokenRef.current ?? token)) {
+        const t = tokenRef.current ?? token;
+        const res = await fetch("/api/admin/close-session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${t}`,
+          },
+          body: JSON.stringify({ code, trainer_signature_data_url }),
+        });
 
-    const res = await fetch("/api/admin/close-session", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...buildHeaders(),
-      },
-      body: JSON.stringify({
-        code,
-        passcode: passcode || null,
-        trainer_signature_data_url,
-      }),
-    });
+        const json = await res.json().catch(() => null);
+        if (!res.ok) return setCloseMsg(json?.error || "Error");
+        setCloseMsg("✅ Charla cerrada con firma del relator.");
+        sig.clear();
+        loadAuthed();
+        return;
+      }
 
-    const json = await res.json().catch(() => null);
-
-    setClosing(false);
-
-    if (!res.ok) {
-      setCloseMsg(json?.error || "Error al cerrar");
-      if (token && !passcode) setShowPasscode(true);
-      return;
+      // 🔒 PASSCODE
+      if (!passcode) return setCloseMsg("Falta passcode");
+      const res = await fetch("/api/admin/close-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passcode, code, trainer_signature_data_url }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) return setCloseMsg(json?.error || "Error");
+      setCloseMsg("✅ Charla cerrada con firma del relator.");
+      sig.clear();
+      loadPasscode();
+    } finally {
+      setClosing(false);
     }
-
-    setCloseMsg("✅ Charla cerrada con firma del relator.");
-    sig.clear();
-    load();
   }
 
   async function generatePdf() {
     setPdfMsg(null);
     setPdfUrl(null);
 
-    if (!token && !passcode) {
-      setPdfMsg("Falta passcode o sesión iniciada.");
-      return;
-    }
-
     setPdfLoading(true);
+    try {
+      // ✅ AUTENTICADO: Bearer
+      if (mode === "authed" && (tokenRef.current ?? token)) {
+        const t = tokenRef.current ?? token;
+        const res = await fetch("/api/admin/generate-pdf", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${t}`,
+          },
+          body: JSON.stringify({ code }),
+        });
 
-    const res = await fetch("/api/admin/generate-pdf", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...buildHeaders(),
-      },
-      body: JSON.stringify({ code, passcode: passcode || null }),
-    });
+        const json = await res.json().catch(() => null);
+        if (!res.ok) return setPdfMsg(json?.error || "Error generando PDF");
+        setPdfMsg("✅ PDF generado.");
+        setPdfUrl(json?.signed_url ?? null);
+        return;
+      }
 
-    const json = await res.json().catch(() => null);
+      // 🔒 PASSCODE
+      if (!passcode) return setPdfMsg("Falta passcode");
+      const res = await fetch("/api/admin/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passcode, code }),
+      });
 
-    setPdfLoading(false);
-
-    if (!res.ok) {
-      setPdfMsg(json?.error || "Error generando PDF");
-      if (token && !passcode) setShowPasscode(true);
-      return;
+      const json = await res.json().catch(() => null);
+      if (!res.ok) return setPdfMsg(json?.error || "Error generando PDF");
+      setPdfMsg("✅ PDF generado.");
+      setPdfUrl(json?.signed_url ?? null);
+    } finally {
+      setPdfLoading(false);
     }
-
-    setPdfMsg("✅ PDF generado.");
-    setPdfUrl(json?.signed_url ?? null);
   }
 
   const session = data?.session;
   const attendees = data?.attendees ?? [];
   const status = session?.status ?? "—";
-  const isClosed = session && session.status !== "open";
-
-  const publicUrl = `${baseUrl}/c/${encodeURIComponent(code)}`;
-  const adminUrl = `${baseUrl}/admin/s/${encodeURIComponent(code)}`;
 
   return (
-    <div className={styles.page}>
-      <div className={styles.card}>
-        <div className={styles.top}>
-          <div className={styles.brand}>
-            <div className={styles.logoBox}>
-              <Image
-                src="/brand/lz-logo.png"
-                alt="LZ Capacita QR"
-                width={150}
-                height={40}
-                priority
-              />
-            </div>
+    <div style={{ maxWidth: 980, margin: "0 auto", padding: 16 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 900 }}>Admin · Asistentes</h1>
+      <p style={{ opacity: 0.75, marginTop: 6 }}>
+        Código: <b>{code}</b>{" "}
+        <span style={{ marginLeft: 10, padding: "4px 10px", borderRadius: 999, border: "1px solid rgba(0,0,0,.12)" }}>
+          {mode === "authed" ? "✅ Acceso por sesión" : "🔒 Acceso por passcode"}
+        </span>
+      </p>
 
-            <div className={styles.brandMeta}>
-              <div className={styles.title}>Admin · Asistentes</div>
-              <div className={styles.subtitle}>
-                Código: <span className={styles.mono}>{code}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.actions}>
-            <button
-              type="button"
-              className={styles.ghostBtn}
-              onClick={() => router.push("/app")}
-              title="Volver al panel"
-            >
-              ← Panel
-            </button>
-
-            <button type="button" className={styles.copyBtn} onClick={() => copyText(publicUrl, "Link público copiado ✅")}>
-              Copiar link QR
-            </button>
-
-            <button type="button" className={styles.copyBtn} onClick={() => copyText(adminUrl, "Link admin copiado ✅")}>
-              Copiar link Admin
-            </button>
-          </div>
-        </div>
-
-        {/* estado auth */}
-        <div className={styles.authRow}>
-          <span className={`${styles.badge} ${token ? styles.badgeOk : styles.badgeWarn}`}>
-            {token ? "Sesión detectada (sin passcode)" : "Modo passcode"}
-          </span>
-
-          <button
-            type="button"
-            className={styles.linkBtn}
-            onClick={() => setShowPasscode((v) => !v)}
-          >
-            {showPasscode ? "Ocultar passcode" : "Usar passcode"}
+      {mode === "passcode" && (
+        <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+          <input
+            style={{ flex: 1, border: "1px solid rgba(0,0,0,.12)", borderRadius: 12, padding: "10px 12px" }}
+            placeholder="Passcode admin"
+            value={passcode}
+            onChange={(e) => setPasscode(e.target.value)}
+          />
+          <button style={{ borderRadius: 12, padding: "10px 14px", fontWeight: 900, cursor: "pointer" }} onClick={loadPasscode}>
+            Cargar
           </button>
         </div>
+      )}
 
-        {showPasscode && (
-          <div className={styles.passRow}>
-            <input
-              className={styles.input}
-              placeholder="Passcode admin (fallback)"
-              value={passcode}
-              onChange={(e) => setPasscode(e.target.value)}
-            />
-            <button className={styles.darkBtn} onClick={load} type="button">
-              Cargar
+      {mode === "authed" && (
+        <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+          <button style={{ borderRadius: 12, padding: "10px 14px", fontWeight: 900, cursor: "pointer" }} onClick={loadAuthed}>
+            Actualizar
+          </button>
+        </div>
+      )}
+
+      {err && (
+        <div style={{ marginTop: 12, padding: 10, borderRadius: 12, background: "#fff1f1", border: "1px solid #ffd0d0", color: "#9b1c1c", fontWeight: 900 }}>
+          {err}
+        </div>
+      )}
+
+      {session && (
+        <div style={{ marginTop: 12, padding: 12, borderRadius: 12, border: "1px solid rgba(0,0,0,.12)", background: "#fff" }}>
+          <div><b>Empresa:</b> {session.companies?.name}</div>
+          <div><b>Dirección:</b> {session.companies?.address || "-"}</div>
+          <div><b>Charla:</b> {session.topic}</div>
+          <div><b>Lugar:</b> {session.location || "-"}</div>
+          <div><b>Relator:</b> {session.trainer_name}</div>
+          <div><b>Estado:</b> {status}{session.closed_at ? ` (cerrada: ${new Date(session.closed_at).toLocaleString("es-CL")})` : ""}</div>
+          <div><b>Total asistentes:</b> {attendees.length}</div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 12, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(0,0,0,.12)", background: "#fff" }}>
+        <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+          <thead style={{ background: "rgba(0,0,0,.03)" }}>
+            <tr>
+              <th style={{ textAlign: "left", padding: 10 }}>Nombre</th>
+              <th style={{ textAlign: "left", padding: 10 }}>RUT</th>
+              <th style={{ textAlign: "left", padding: 10 }}>Cargo</th>
+              <th style={{ textAlign: "left", padding: 10 }}>Hora</th>
+            </tr>
+          </thead>
+          <tbody>
+            {attendees.map((a: any, i: number) => (
+              <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,.06)" }}>
+                <td style={{ padding: 10 }}>{a.full_name}</td>
+                <td style={{ padding: 10 }}>{a.rut}</td>
+                <td style={{ padding: 10 }}>{a.role || "-"}</td>
+                <td style={{ padding: 10 }}>{new Date(a.created_at).toLocaleString("es-CL")}</td>
+              </tr>
+            ))}
+            {!attendees.length && (
+              <tr>
+                <td style={{ padding: 10 }} colSpan={4}>
+                  Aún no hay asistentes…
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {session && session.status === "open" && (
+        <div style={{ marginTop: 14, padding: 14, borderRadius: 12, border: "1px solid rgba(0,0,0,.12)", background: "#fff" }}>
+          <h2 style={{ fontWeight: 950 }}>Cerrar charla (firma relator)</h2>
+
+          <div style={{ marginTop: 10, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(0,0,0,.12)" }}>
+            {mounted ? (
+              <SignatureCanvas
+                ref={(r) => {
+                  sigRef.current = r;
+                }}
+                canvasProps={{ width: 900, height: 200, className: "w-full h-[200px]" }}
+              />
+            ) : (
+              <div style={{ width: "100%", height: 200 }} />
+            )}
+          </div>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+            <button
+              style={{ flex: 1, borderRadius: 12, padding: "10px 12px", fontWeight: 900, cursor: "pointer", border: "1px solid rgba(0,0,0,.12)", background: "#fff" }}
+              onClick={() => sigRef.current?.clear()}
+            >
+              Limpiar firma
+            </button>
+            <button
+              style={{ flex: 1, borderRadius: 12, padding: "10px 12px", fontWeight: 950, cursor: "pointer", border: "none", background: "#0b1220", color: "#fff", opacity: closing ? 0.7 : 1 }}
+              disabled={closing}
+              onClick={closeSession}
+            >
+              {closing ? "Cerrando…" : "Firmar y cerrar"}
             </button>
           </div>
-        )}
 
-        {err && <div className={styles.error}>{err}</div>}
-        {notice && <div className={styles.notice}>{notice}</div>}
+          {closeMsg && <p style={{ marginTop: 10, fontWeight: 900 }}>{closeMsg}</p>}
+        </div>
+      )}
 
-        {/* Info sesión */}
-        {session && (
-          <section className={styles.info}>
-            <div className={styles.infoGrid}>
-              <div className={styles.infoItem}>
-                <div className={styles.infoLabel}>Empresa</div>
-                <div className={styles.infoValue}>{session.companies?.name ?? "—"}</div>
-              </div>
-              <div className={styles.infoItem}>
-                <div className={styles.infoLabel}>Dirección</div>
-                <div className={styles.infoValue}>{session.companies?.address || "—"}</div>
-              </div>
-              <div className={styles.infoItem}>
-                <div className={styles.infoLabel}>Charla</div>
-                <div className={styles.infoValue}>{session.topic || "—"}</div>
-              </div>
-              <div className={styles.infoItem}>
-                <div className={styles.infoLabel}>Lugar</div>
-                <div className={styles.infoValue}>{session.location || "—"}</div>
-              </div>
-              <div className={styles.infoItem}>
-                <div className={styles.infoLabel}>Relator</div>
-                <div className={styles.infoValue}>{session.trainer_name || "—"}</div>
-              </div>
-              <div className={styles.infoItem}>
-                <div className={styles.infoLabel}>Estado</div>
-                <div className={styles.infoValue}>
-                  <span className={`${styles.badge} ${isClosed ? styles.badgeClosed : styles.badgeOpen}`}>
-                    {status}
-                  </span>
-                  {session.closed_at ? (
-                    <span className={styles.smallMuted}>
-                      {" "}
-                      · cerrada: {new Date(session.closed_at).toLocaleString("es-CL")}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            </div>
+      {session && session.status !== "open" && (
+        <div style={{ marginTop: 14, padding: 14, borderRadius: 12, border: "1px solid rgba(0,0,0,.12)", background: "#fff" }}>
+          <div style={{ fontWeight: 950 }}>✅ Esta charla ya está cerrada.</div>
 
-            <div className={styles.kpis}>
-              <div className={styles.kpi}>
-                <div className={styles.kpiLabel}>Asistentes</div>
-                <div className={styles.kpiValue}>{attendees.length}</div>
-              </div>
-
-              <div className={styles.kpi}>
-                <div className={styles.kpiLabel}>Link público</div>
-                <div className={styles.kpiValueMono}>/c/{code}</div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Tabla asistentes */}
-        <section className={styles.section}>
-          <div className={styles.sectionTitle}>Asistentes</div>
-
-          <div className={styles.tableWrap}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Nombre</th>
-                  <th>RUT</th>
-                  <th>Cargo</th>
-                  <th>Hora</th>
-                </tr>
-              </thead>
-              <tbody>
-                {attendees.map((a: any, i: number) => (
-                  <tr key={i}>
-                    <td>{a.full_name}</td>
-                    <td className={styles.mono}>{a.rut}</td>
-                    <td>{a.role || "—"}</td>
-                    <td>{new Date(a.created_at).toLocaleString("es-CL")}</td>
-                  </tr>
-                ))}
-                {!attendees.length && (
-                  <tr>
-                    <td colSpan={4} className={styles.emptyCell}>
-                      Aún no hay asistentes…
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* Cerrar charla */}
-        {session && session.status === "open" && (
-          <section className={styles.section}>
-            <div className={styles.sectionTitle}>Cerrar charla (firma relator)</div>
-
-            <div className={styles.sigBox}>
-              {mounted ? (
-                <SignatureCanvas
-                  ref={(r) => {
-                    sigRef.current = r;
-                  }}
-                  canvasProps={{
-                    width: 900,
-                    height: 200,
-                    className: styles.sigCanvas,
-                  }}
-                />
-              ) : (
-                <div className={styles.sigPlaceholder} />
-              )}
-            </div>
-
-            <div className={styles.rowBtns}>
-              <button className={styles.secondaryBtn} type="button" onClick={() => sigRef.current?.clear()}>
-                Limpiar firma
-              </button>
-
-              <button className={styles.darkBtn} type="button" disabled={closing} onClick={closeSession}>
-                {closing ? "Cerrando…" : "Firmar y cerrar"}
-              </button>
-            </div>
-
-            {closeMsg && <div className={styles.smallMsg}>{closeMsg}</div>}
-          </section>
-        )}
-
-        {/* PDF */}
-        {session && session.status !== "open" && (
-          <section className={styles.section}>
-            <div className={styles.sectionTitle}>PDF del registro</div>
+          <div style={{ marginTop: 12, padding: 14, borderRadius: 12, border: "1px solid rgba(0,0,0,.10)", background: "rgba(0,0,0,.02)" }}>
+            <h2 style={{ fontWeight: 950 }}>PDF del registro</h2>
 
             <button
-              className={styles.darkBtnWide}
-              type="button"
+              style={{ marginTop: 10, width: "100%", borderRadius: 12, padding: "10px 12px", fontWeight: 950, cursor: "pointer", border: "none", background: "#0b1220", color: "#fff", opacity: pdfLoading ? 0.7 : 1 }}
               disabled={pdfLoading}
               onClick={generatePdf}
             >
               {pdfLoading ? "Generando…" : "Generar PDF"}
             </button>
 
-            {pdfMsg && <div className={styles.smallMsg}>{pdfMsg}</div>}
+            {pdfMsg && <p style={{ marginTop: 10, fontWeight: 900 }}>{pdfMsg}</p>}
 
             {pdfUrl && (
-              <a className={styles.link} href={pdfUrl} target="_blank" rel="noreferrer">
+              <a style={{ display: "block", marginTop: 10, textDecoration: "underline", wordBreak: "break-all" }} href={pdfUrl} target="_blank" rel="noreferrer">
                 Descargar PDF
               </a>
             )}
-          </section>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

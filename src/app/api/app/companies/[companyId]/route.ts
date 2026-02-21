@@ -18,34 +18,37 @@ function sbAuthed(token: string) {
   });
 }
 
-function getCompanyId(ctx: any): string | null {
-  const companyId = ctx?.params?.companyId;
-  if (!companyId || typeof companyId !== "string") return null;
-  return companyId;
-}
-
 async function requireUser(req: NextRequest) {
   const token = getToken(req);
-  if (!token) {
-    return { ok: false as const, status: 401, error: "Missing bearer token" };
-  }
+  if (!token) return { ok: false as const, status: 401, error: "Missing bearer token" };
 
   const supabase = sbAuthed(token);
-  const { data: u, error: uerr } = await supabase.auth.getUser(token);
+  const { data: u, error: uerr } = await supabase.auth.getUser();
 
-  if (uerr || !u?.user) {
-    return { ok: false as const, status: 401, error: "Unauthorized" };
-  }
+  if (uerr || !u?.user) return { ok: false as const, status: 401, error: "Unauthorized" };
 
   return { ok: true as const, token, supabase, user: u.user };
 }
 
+// ✅ Fallback universal: extrae companyId desde la URL
+function companyIdFromReq(req: NextRequest) {
+  // Ej: /api/app/companies/<companyId>
+  const parts = req.nextUrl.pathname.split("/").filter(Boolean);
+  const idx = parts.indexOf("companies");
+  const id = idx >= 0 ? parts[idx + 1] : null;
+  return id && id !== "companies" ? id : null;
+}
+
+function resolveCompanyId(req: NextRequest, ctx?: any) {
+  const fromParams = ctx?.params?.companyId;
+  if (typeof fromParams === "string" && fromParams) return fromParams;
+  return companyIdFromReq(req);
+}
+
 export async function GET(req: NextRequest, ctx?: any) {
   try {
-    const companyId = getCompanyId(ctx);
-    if (!companyId) {
-      return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
-    }
+    const companyId = resolveCompanyId(req, ctx);
+    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
 
     const auth = await requireUser(req);
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -65,10 +68,8 @@ export async function GET(req: NextRequest, ctx?: any) {
 
 export async function PATCH(req: NextRequest, ctx?: any) {
   try {
-    const companyId = getCompanyId(ctx);
-    if (!companyId) {
-      return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
-    }
+    const companyId = resolveCompanyId(req, ctx);
+    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
 
     const auth = await requireUser(req);
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -77,18 +78,24 @@ export async function PATCH(req: NextRequest, ctx?: any) {
     const patch: any = {};
 
     if (typeof body.name === "string") patch.name = body.name.trim();
-    if (typeof body.rut === "string") patch.rut = body.rut.trim();
     if (typeof body.address === "string" || body.address === null) {
       patch.address = body.address ? String(body.address).trim() : null;
     }
-
-    if (typeof body.contact_name === "string") patch.contact_name = body.contact_name.trim();
+    if (typeof body.rut === "string" || body.rut === null) {
+      patch.rut = body.rut ? String(body.rut).trim() : null;
+    }
+    if (typeof body.contact_name === "string" || body.contact_name === null) {
+      patch.contact_name = body.contact_name ? String(body.contact_name).trim() : null;
+    }
     if (typeof body.contact_rut === "string" || body.contact_rut === null) {
       patch.contact_rut = body.contact_rut ? String(body.contact_rut).trim() : null;
     }
-    if (typeof body.contact_email === "string") patch.contact_email = body.contact_email.trim();
-    if (typeof body.contact_phone === "string") patch.contact_phone = body.contact_phone.trim();
-
+    if (typeof body.contact_email === "string" || body.contact_email === null) {
+      patch.contact_email = body.contact_email ? String(body.contact_email).trim() : null;
+    }
+    if (typeof body.contact_phone === "string" || body.contact_phone === null) {
+      patch.contact_phone = body.contact_phone ? String(body.contact_phone).trim() : null;
+    }
     if (typeof body.logo_path === "string" || body.logo_path === null) {
       patch.logo_path = body.logo_path ? String(body.logo_path).replace(/^company-logos\//, "") : null;
     }
@@ -109,15 +116,13 @@ export async function PATCH(req: NextRequest, ctx?: any) {
 
 export async function DELETE(req: NextRequest, ctx?: any) {
   try {
-    const companyId = getCompanyId(ctx);
-    if (!companyId) {
-      return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
-    }
+    const companyId = resolveCompanyId(req, ctx);
+    if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
 
     const auth = await requireUser(req);
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-    // 1) Traer empresa (para logo_path)
+    // 1) Traer empresa para logo_path
     const { data: company, error: cErr } = await auth.supabase
       .from("companies")
       .select("id,logo_path")
@@ -142,7 +147,7 @@ export async function DELETE(req: NextRequest, ctx?: any) {
       );
     }
 
-    // 3) Borrar logo si existe
+    // 3) Borrar logo
     if (company.logo_path) {
       await auth.supabase.storage.from("company-logos").remove([String(company.logo_path)]);
     }

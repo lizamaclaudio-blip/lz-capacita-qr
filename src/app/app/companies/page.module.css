@@ -1,0 +1,31 @@
+.page { display: flex; flex-direction: column; gap: 14px; }
+.error { padding: 10px 12px; border-radius: 12px; background: #fff1f1; border: 1px solid #ffd0d0; color: #9b1c1c; font-size: 13px; }
+.muted { font-size: 13px; opacity: .75; }
+
+.headerRow { display:flex; justify-content:space-between; align-items:flex-end; gap:12px; }
+.title { font-size: 20px; font-weight: 900; }
+.sub { font-size: 12px; opacity: .75; }
+
+.primary { border: none; border-radius: 12px; padding: 10px 14px; font-weight: 900; cursor: pointer; background: #1dbf73; color: #0b1b11; }
+
+.gridCompanies { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 1100px){ .gridCompanies { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 800px){ .gridCompanies { grid-template-columns: 1fr; } }
+
+.companyCard { background:#fff; border:1px solid rgba(0,0,0,.08); border-radius: 18px; padding: 14px; display:flex; flex-direction:column; gap: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.06); }
+.companyTop { display:flex; gap: 12px; align-items: center; }
+
+.companyAvatar { width: 56px; height: 56px; border-radius: 16px; background: #eef4ff; display:flex; align-items:center; justify-content:center; border: 1px solid rgba(0,0,0,.08); overflow: hidden; }
+.companyLogo { width: 100%; height: 100%; object-fit: contain; background: transparent; }
+.companyInitial { font-weight: 900; font-size: 18px; opacity: .8; }
+
+.companyInfo { flex: 1; min-width: 0; }
+.companyName { font-weight: 900; font-size: 16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.companyMeta { font-size: 12px; opacity: .75; margin-top: 2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.companyBottom { display:flex; justify-content:space-between; align-items:center; gap: 12px; }
+.companyCreated { font-size: 12px; opacity: .7; }
+
+.companyActions { display:flex; gap: 10px; align-items:center; }
+.editBtn { border:1px solid rgba(0,0,0,.12); background:#fff; border-radius: 12px; padding: 8px 12px; font-weight: 800; cursor:pointer; }
+.openBtn { border:none; background:#1dbf73; color:#0b1b11; border-radius: 12px; padding: 8px 12px; font-weight: 900; cursor:pointer; }

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function getToken(req: NextRequest) {
@@ -35,37 +34,27 @@ async function requireUser(req: NextRequest) {
   return { ok: true as const, token, supabase, user: u.user };
 }
 
-// GET /api/app/companies
 export async function GET(req: NextRequest) {
   try {
     const auth = await requireUser(req);
-    if (!auth.ok) {
-      return NextResponse.json({ error: auth.error }, { status: auth.status });
-    }
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-    // Trae todo lo que exista en companies (incluye rut/contact/logo_path si están en tu tabla)
     const { data, error } = await auth.supabase
       .from("companies")
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ companies: data ?? [] });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }
 }
 
-// POST /api/app/companies
 export async function POST(req: NextRequest) {
   try {
     const auth = await requireUser(req);
-    if (!auth.ok) {
-      return NextResponse.json({ error: auth.error }, { status: auth.status });
-    }
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
     const body = await req.json().catch(() => ({}));
 
@@ -74,57 +63,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nombre empresa es obligatorio" }, { status: 400 });
     }
 
-    // Campos opcionales (si existen en tu tabla)
-    const address =
-      typeof body.address === "string" && body.address.trim() ? body.address.trim() : null;
-
-    const rut = typeof body.rut === "string" && body.rut.trim() ? body.rut.trim() : null;
-
-    const contact_name =
-      typeof body.contact_name === "string" && body.contact_name.trim()
-        ? body.contact_name.trim()
-        : null;
-
-    const contact_rut =
-      typeof body.contact_rut === "string" && body.contact_rut.trim()
-        ? body.contact_rut.trim()
-        : null;
-
-    const contact_email =
-      typeof body.contact_email === "string" && body.contact_email.trim()
-        ? body.contact_email.trim()
-        : null;
-
-    const contact_phone =
-      typeof body.contact_phone === "string" && body.contact_phone.trim()
-        ? body.contact_phone.trim()
-        : null;
-
-    // OJO: guardamos SOLO el path dentro del bucket, ejemplo: "companies/<id>/logo.png"
-    const logo_path =
-      typeof body.logo_path === "string" && body.logo_path.trim() ? body.logo_path.trim() : null;
-
-    const insertRow: any = {
+    const payload: any = {
       name,
-      address,
-      rut,
-      contact_name,
-      contact_rut,
-      contact_email,
-      contact_phone,
-      logo_path,
+      address: typeof body.address === "string" && body.address.trim() ? body.address.trim() : null,
+      rut: typeof body.rut === "string" && body.rut.trim() ? body.rut.trim() : null,
+
+      contact_name:
+        typeof body.contact_name === "string" && body.contact_name.trim()
+          ? body.contact_name.trim()
+          : null,
+      contact_rut:
+        typeof body.contact_rut === "string" && body.contact_rut.trim()
+          ? body.contact_rut.trim()
+          : null,
+      contact_email:
+        typeof body.contact_email === "string" && body.contact_email.trim()
+          ? body.contact_email.trim()
+          : null,
+      contact_phone:
+        typeof body.contact_phone === "string" && body.contact_phone.trim()
+          ? body.contact_phone.trim()
+          : null,
+
+      // guarda solo el path dentro del bucket, ejemplo: "companies/<id>/logo.png"
+      logo_path:
+        typeof body.logo_path === "string" && body.logo_path.trim()
+          ? body.logo_path.replace(/^company-logos\//, "")
+          : null,
     };
 
     const { data, error } = await auth.supabase
       .from("companies")
-      .insert(insertRow)
+      .insert(payload)
       .select("*")
       .single();
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     return NextResponse.json({ company: data });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });

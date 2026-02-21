@@ -1,63 +1,49 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import styles from "./layout.module.css";
+import { useRouter } from "next/navigation";
 import Sidebar from "@/components/app/Sidebar";
 import Topbar from "@/components/app/Topbar";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import styles from "./layout.module.css";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
 
   const [checking, setChecking] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
-
-  const title = useMemo(() => {
-    if (pathname === "/app" || pathname === "/app/dashboard") return "Dashboard";
-    if (pathname.startsWith("/app/profile")) return "Mi perfil";
-    if (pathname.startsWith("/app/companies/new")) return "Crear empresa";
-    if (pathname.startsWith("/app/companies")) return "Mis empresas";
-    if (pathname.startsWith("/app/sessions")) return "Mis charlas";
-    if (pathname.startsWith("/app/pdfs")) return "Mis PDF";
-    return "Panel";
-  }, [pathname]);
+  const [greetingName, setGreetingName] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
 
-    async function boot() {
+    (async () => {
       const { data } = await supabaseBrowser.auth.getSession();
       const session = data.session;
 
       if (!alive) return;
 
       if (!session) {
-        router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
+        router.replace("/login");
         return;
       }
 
-      setEmail(session.user?.email ?? null);
+      const em = session.user?.email ?? null;
+      setEmail(em);
+
+      // nombre para el saludo: usa metadata si existe, si no usa parte del email
+      const metaName =
+        (session.user as any)?.user_metadata?.full_name ||
+        (session.user as any)?.user_metadata?.name ||
+        null;
+
+      setGreetingName(metaName ? String(metaName) : null);
+
       setChecking(false);
-    }
-
-    boot();
-
-    const { data: sub } = supabaseBrowser.auth.onAuthStateChange((_event, session) => {
-      if (!alive) return;
-
-      if (!session) {
-        router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
-        return;
-      }
-
-      setEmail(session.user?.email ?? null);
-    });
+    })();
 
     return () => {
       alive = false;
-      sub.subscription.unsubscribe();
     };
   }, [router]);
 
@@ -66,19 +52,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     router.replace("/login");
   }
 
+  const subtitle = useMemo(() => "Panel LZ Capacita QR", []);
+
   if (checking) {
-    return <div className={styles.center}>Cargando panel…</div>;
+    return (
+      <div className={styles.loading}>
+        Cargando panel…
+      </div>
+    );
   }
 
   return (
     <div className={styles.shell}>
       <Sidebar />
 
-      <div className={styles.main}>
-        {/* ✅ Topbar único (se termina el duplicado) */}
-        <Topbar title={title} email={email} onLogout={logout} />
+      <div className={styles.content}>
+        <Topbar
+          greetingName={greetingName}
+          email={email}
+          subtitle={subtitle}
+          onLogout={logout}
+        />
 
-        <div className={styles.content}>{children}</div>
+        <main className={styles.main}>
+          {children}
+        </main>
       </div>
     </div>
   );

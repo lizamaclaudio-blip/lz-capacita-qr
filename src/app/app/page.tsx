@@ -1,410 +1,170 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import EditCompanyModal, { Company } from "@/components/app/EditCompanyModal";
 import styles from "./page.module.css";
 
-export default function AppHome() {
+export default function DashboardPage() {
   const router = useRouter();
   const sp = useSearchParams();
 
   const [loading, setLoading] = useState(true);
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companiesCount, setCompaniesCount] = useState<number>(0);
+  const [sessionsCount, setSessionsCount] = useState<number | null>(null);
+
   const [error, setError] = useState<string | null>(null);
 
-  const [email, setEmail] = useState<string | null>(null);
-
-  // Modal edit
-  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
-
-  // form create
-  const [name, setName] = useState("");
-  const [rut, setRut] = useState("");
-  const [address, setAddress] = useState("");
-
-  const [contactName, setContactName] = useState("");
-  const [contactRut, setContactRut] = useState("");
-  const [contactEmail, setContactEmail] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
-
-  // logo (por ahora lo guardamos después cuando conectemos bucket)
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-
-  const logoPreview = useMemo(() => {
-    if (!logoFile) return null;
-    return URL.createObjectURL(logoFile);
-  }, [logoFile]);
-
+  // ✅ Mostrar mensaje ?e=... una vez y limpiar URL
   useEffect(() => {
     const e = sp.get("e");
-    if (e) setError(decodeURIComponent(e));
+    if (!e) return;
+
+    const msg = decodeURIComponent(e);
+    setError(msg);
+
+    // limpia la URL para que no siga apareciendo
+    router.replace("/app");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sp]);
 
   async function getTokenOrRedirect() {
     const { data } = await supabaseBrowser.auth.getSession();
-    const session = data.session;
+    const token = data.session?.access_token;
 
-    if (!session?.access_token) {
-      router.replace("/login");
+    if (!token) {
+      router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
       return null;
     }
-
-    setEmail(session.user?.email ?? null);
-    return session.access_token;
+    return token;
   }
 
-  async function loadCompanies() {
+  async function loadDashboard() {
     setLoading(true);
-    setError(null);
 
     const token = await getTokenOrRedirect();
     if (!token) return;
 
-    const res = await fetch("/api/app/companies", {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
+    try {
+      // Empresas
+      const cRes = await fetch("/api/app/companies", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      const cJson = await cRes.json().catch(() => null);
+      if (!cRes.ok) throw new Error(cJson?.error || "No se pudieron cargar empresas");
+      const companies = cJson?.companies ?? [];
+      setCompaniesCount(companies.length);
 
-    const json = await res.json().catch(() => null);
-
-    if (!res.ok) {
-      setCompanies([]);
+      // Charlas (si existe /api/app/sessions)
+      try {
+        const sRes = await fetch("/api/app/sessions", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        if (sRes.ok) {
+          const sJson = await sRes.json().catch(() => null);
+          setSessionsCount((sJson?.sessions ?? []).length);
+        } else {
+          setSessionsCount(null);
+        }
+      } catch {
+        setSessionsCount(null);
+      }
+    } catch (e: any) {
+      setCompaniesCount(0);
+      setSessionsCount(null);
+      setError(e?.message || "No se pudo cargar el dashboard");
+    } finally {
       setLoading(false);
-      setError(json?.error || "No se pudo cargar empresas");
-      return;
     }
-
-    // ✅ Clave: aseguramos que venga id y lo guardamos completo
-    const list: Company[] = (json?.companies ?? []).filter((c: any) => c?.id);
-
-    setCompanies(list);
-    setLoading(false);
   }
 
   useEffect(() => {
-    loadCompanies();
+    loadDashboard();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function logout() {
-    await supabaseBrowser.auth.signOut();
-    router.replace("/login");
-  }
-
-  async function createCompany(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-
-    if (!name.trim()) return setError("Nombre empresa es obligatorio.");
-
-    const token = await getTokenOrRedirect();
-    if (!token) return;
-
-    const payload = {
-      name: name.trim(),
-      rut: rut.trim() ? rut.trim() : null,
-      address: address.trim() ? address.trim() : null,
-
-      contact_name: contactName.trim() ? contactName.trim() : null,
-      contact_rut: contactRut.trim() ? contactRut.trim() : null,
-      contact_email: contactEmail.trim() ? contactEmail.trim() : null,
-      contact_phone: contactPhone.trim() ? contactPhone.trim() : null,
-
-      // logo_path lo conectamos cuando hagamos el bucket
-      logo_path: null,
-    };
-
-    const res = await fetch("/api/app/companies", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const json = await res.json().catch(() => null);
-
-    if (!res.ok) {
-      setError(json?.error || "No se pudo crear empresa");
-      return;
-    }
-
-    // reset
-    setName("");
-    setRut("");
-    setAddress("");
-    setContactName("");
-    setContactRut("");
-    setContactEmail("");
-    setContactPhone("");
-    setLogoFile(null);
-
-    await loadCompanies();
-  }
-
-  function openCompany(companyId: string) {
-    router.push(`/app/company/${companyId}`);
-  }
-
-  function openEdit(company: Company) {
-    // ✅ aquí está el fix: guardamos el objeto completo (incluye id)
-    setEditingCompany(company);
-  }
-
-  function logoPublicUrl(logo_path: string | null) {
-    if (!logo_path) return null;
-    const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (!base) return null;
-
-    // si guardaste con prefijo, lo limpiamos
-    const clean = logo_path.replace(/^company-logos\//, "");
-    return `${base}/storage/v1/object/public/company-logos/${clean}`;
-  }
-
   return (
     <div className={styles.page}>
-      <div className={styles.topbar}>
-        <div className={styles.topbarTitle}>Dashboard</div>
-
-        <div className={styles.topbarRight}>
-          {email && <div className={styles.email}>{email}</div>}
-          <button className={styles.logoutBtn} onClick={logout}>
-            → Salir
-          </button>
+      <div className={styles.head}>
+        <div>
+          <div className={styles.title}>Dashboard</div>
+          <div className={styles.sub}>Resumen general de tu panel. Accesos rápidos para avanzar.</div>
         </div>
+
+        <button className={styles.refreshBtn} onClick={loadDashboard} disabled={loading}>
+          {loading ? "Cargando…" : "Actualizar"}
+        </button>
       </div>
 
-      {error && <div className={styles.error}>{error}</div>}
+      {error && (
+        <div className={styles.error}>
+          {error}
+        </div>
+      )}
 
       <div className={styles.kpis}>
-        <div className={styles.kpi}>
+        <button className={styles.kpi} onClick={() => router.push("/app/companies")}>
           <div className={styles.kpiIcon}>🏢</div>
-          <div>
+          <div className={styles.kpiText}>
             <div className={styles.kpiTitle}>Empresas</div>
-            <div className={styles.kpiSub}>Clientes, sucursales y contacto</div>
+            <div className={styles.kpiSub}>Clientes y contactos</div>
           </div>
-          <div className={styles.kpiBadge}>{companies.length}</div>
-        </div>
+          <div className={styles.kpiBadge}>{loading ? "…" : companiesCount}</div>
+        </button>
 
-        <div className={styles.kpi}>
+        <button className={styles.kpi} onClick={() => router.push("/app/sessions")}>
           <div className={styles.kpiIcon}>📋</div>
-          <div>
+          <div className={styles.kpiText}>
             <div className={styles.kpiTitle}>Charlas</div>
-            <div className={styles.kpiSub}>Crea y cierra con firma</div>
+            <div className={styles.kpiSub}>Crear, QR, cierre</div>
           </div>
-          <div className={styles.kpiBadgeMuted}>Pronto</div>
-        </div>
+          <div className={styles.kpiBadgeMuted}>
+            {loading ? "…" : sessionsCount === null ? "Pronto" : sessionsCount}
+          </div>
+        </button>
 
-        <div className={styles.kpi}>
+        <div className={styles.kpiDisabled}>
           <div className={styles.kpiIcon}>🪪</div>
-          <div>
+          <div className={styles.kpiText}>
             <div className={styles.kpiTitle}>Asistencia</div>
-            <div className={styles.kpiSub}>Formulario público por QR</div>
+            <div className={styles.kpiSub}>Registro público por QR</div>
           </div>
           <div className={styles.kpiBadgeMuted}>Pronto</div>
         </div>
 
-        <div className={styles.kpi}>
+        <div className={styles.kpiDisabled}>
           <div className={styles.kpiIcon}>📄</div>
-          <div>
+          <div className={styles.kpiText}>
             <div className={styles.kpiTitle}>PDF Final</div>
-            <div className={styles.kpiSub}>Registro + firmas + logo</div>
+            <div className={styles.kpiSub}>Lista + firmas + logo</div>
           </div>
           <div className={styles.kpiBadgeMuted}>Pronto</div>
         </div>
       </div>
 
       <div className={styles.card}>
-        <div className={styles.cardHeader}>
-          <div className={styles.cardTitle}>Crear empresa</div>
-          <div className={styles.cardSub}>
-            Completa los datos del cliente y su contacto principal
-          </div>
-        </div>
+        <div className={styles.cardTitle}>Acciones rápidas</div>
+        <div className={styles.cardSub}>Atajos para avanzar más rápido</div>
 
-        <form onSubmit={createCompany} className={styles.form}>
-          <div className={styles.sectionTitle}>Datos Empresa</div>
-
-          <div className={styles.grid2}>
-            <div className={styles.field}>
-              <label className={styles.label}>Nombre empresa</label>
-              <input
-                className={styles.input}
-                placeholder="Ej: Automotora Berríos"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>RUT empresa</label>
-              <input
-                className={styles.input}
-                placeholder="Ej: 76.123.456-7"
-                value={rut}
-                onChange={(e) => setRut(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Dirección empresa</label>
-              <input
-                className={styles.input}
-                placeholder="Ej: Puerto Montt"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Logo empresa</label>
-              <input
-                className={styles.file}
-                type="file"
-                accept="image/*"
-                onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
-              />
-              {logoPreview && (
-                <div className={styles.previewWrap}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img className={styles.previewImg} src={logoPreview} alt="preview" />
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className={styles.sectionTitle}>Contacto Principal</div>
-
-          <div className={styles.grid2}>
-            <div className={styles.field}>
-              <label className={styles.label}>Nombre contacto</label>
-              <input
-                className={styles.input}
-                placeholder="Ej: Juan Pérez"
-                value={contactName}
-                onChange={(e) => setContactName(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>RUT contacto</label>
-              <input
-                className={styles.input}
-                placeholder="Ej: 12.345.678-9"
-                value={contactRut}
-                onChange={(e) => setContactRut(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Mail contacto</label>
-              <input
-                className={styles.input}
-                placeholder="Ej: contacto@empresa.cl"
-                value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
-              />
-            </div>
-
-            <div className={styles.field}>
-              <label className={styles.label}>Teléfono contacto</label>
-              <input
-                className={styles.input}
-                placeholder="Ej: +56 9 1234 5678"
-                value={contactPhone}
-                onChange={(e) => setContactPhone(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <button className={styles.submit} type="submit">
-            Guardar empresa
+        <div className={styles.actions}>
+          <button className={styles.actionBtn} onClick={() => router.push("/app/companies/new")}>
+            ➕ Crear empresa
           </button>
-        </form>
-      </div>
-
-      <div className={styles.card}>
-        <div className={styles.cardHeader}>
-          <div className={styles.cardTitle}>Tus empresas</div>
-          <div className={styles.cardSub}>Selecciona una empresa para administrar sus charlas</div>
+          <button className={styles.actionBtn} onClick={() => router.push("/app/companies")}>
+            🏢 Ver mis empresas
+          </button>
+          <button className={styles.actionBtn} onClick={() => router.push("/app/sessions")}>
+            📋 Ir a mis charlas
+          </button>
+          <button className={styles.actionBtn} onClick={() => router.push("/app/pdfs")}>
+            📄 Ver mis PDF
+          </button>
         </div>
-
-        {loading ? (
-          <div className={styles.muted}>Cargando…</div>
-        ) : !companies.length ? (
-          <div className={styles.muted}>Aún no creas ninguna empresa.</div>
-        ) : (
-          <div className={styles.gridCompanies}>
-            {companies.map((c) => {
-              const logoUrl = logoPublicUrl(c.logo_path);
-              const initial = (c.name?.trim()?.[0] ?? "E").toUpperCase();
-
-              return (
-                <div key={c.id} className={styles.companyCard}>
-                  <div className={styles.companyTop}>
-                    <div className={styles.companyAvatar}>
-                      {logoUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={logoUrl} alt="logo" className={styles.companyLogo} />
-                      ) : (
-                        <div className={styles.companyInitial}>{initial}</div>
-                      )}
-                    </div>
-
-                    <div className={styles.companyInfo}>
-                      <div className={styles.companyName}>{c.name}</div>
-                      <div className={styles.companyMeta}>
-                        {c.address ? `— ${c.address}` : "— Sin dirección"}
-                      </div>
-                      <div className={styles.companyMeta}>
-                        Contacto: {c.contact_name ?? "—"} · {c.contact_email ?? "—"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className={styles.companyBottom}>
-                    <div className={styles.companyCreated}>
-                      Creada: {new Date(c.created_at).toLocaleString("es-CL")}
-                    </div>
-
-                    <div className={styles.companyActions}>
-                      <button
-                        type="button"
-                        className={styles.editBtn}
-                        onClick={() => openEdit(c)}
-                      >
-                        Editar
-                      </button>
-
-                      <button
-                        type="button"
-                        className={styles.openBtn}
-                        onClick={() => openCompany(c.id)}
-                      >
-                        Abrir →
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       <div className={styles.footer}>Creado por Claudio Lizama © 2026</div>
-
-      {/* ✅ Modal Edit (la clave está en pasar company COMPLETO) */}
-      <EditCompanyModal
-        open={!!editingCompany}
-        company={editingCompany}
-        onClose={() => setEditingCompany(null)}
-        onSaved={loadCompanies}
-      />
     </div>
   );
 }

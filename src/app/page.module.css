@@ -1,12 +1,6 @@
 .page{ display:flex; flex-direction:column; gap:14px; }
 
-.head{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-end;
-  gap:12px;
-}
-
+.head{ display:flex; justify-content:space-between; align-items:flex-end; gap:12px; }
 .title{ font-size:20px; font-weight:950; }
 .sub{ margin-top:4px; font-size:12px; opacity:.75; }
 
@@ -30,17 +24,14 @@
   font-weight:850;
 }
 
-/* KPIs grid */
 .kpis{
   display:grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
-
 @media (max-width: 1100px){
   .kpis{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-
 @media (max-width: 700px){
   .kpis{ grid-template-columns: 1fr; }
 }
@@ -66,7 +57,7 @@
   box-shadow: 0 16px 34px rgba(0,0,0,.08);
 }
 
-.kpiDisabled{ opacity: .88; }
+.kpiDisabled{ opacity: .85; }
 
 .kpiIcon{
   width: 44px;
@@ -77,7 +68,6 @@
   background: rgba(2,6,23,.03);
   border: 1px solid rgba(2,6,23,.06);
   font-size: 18px;
-  flex: 0 0 44px;
 }
 
 .kpiText{ flex: 1; min-width: 0; }
@@ -97,7 +87,7 @@
 }
 
 .kpiBadgeMuted{
-  min-width: 72px;
+  min-width: 64px;
   height: 34px;
   border-radius: 999px;
   display:grid;
@@ -108,7 +98,6 @@
   color: rgba(2,6,23,.65);
 }
 
-/* Actions card */
 .card{
   background: rgba(255,255,255,0.92);
   border: 1px solid rgba(0,0,0,.08);
@@ -126,7 +115,6 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
-
 @media (max-width: 1100px){
   .actions{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

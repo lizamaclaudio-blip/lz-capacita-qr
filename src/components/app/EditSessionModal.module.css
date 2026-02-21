@@ -1,0 +1,125 @@
+.backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 16px;
+  z-index: 50;
+}
+
+.modal{
+  width: min(760px, 100%);
+  background: rgba(255,255,255,0.98);
+  border: 1px solid rgba(0,0,0,.10);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  padding: 14px;
+}
+
+.top{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 10px;
+}
+
+.title{ font-weight: 950; font-size: 16px; }
+.sub{ font-size: 12px; opacity:.72; margin-top: 2px; }
+
+.x{
+  border: 1px solid rgba(0,0,0,.12);
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor:pointer;
+  font-weight: 950;
+}
+
+.error{
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff1f1;
+  border: 1px solid #ffd0d0;
+  color: #9b1c1c;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.grid{
+  margin-top: 12px;
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 760px){
+  .grid{ grid-template-columns: 1fr; }
+}
+
+.field{ display:flex; flex-direction:column; gap:6px; }
+.label{ font-size: 12px; font-weight: 900; opacity:.75; }
+.input{
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  outline:none;
+  background:#fff;
+  font-size: 14px;
+}
+.input:focus{
+  border-color: rgba(29,191,115,.7);
+  box-shadow: 0 0 0 3px rgba(29,191,115,.18);
+}
+
+.actions{
+  margin-top: 12px;
+  display:flex;
+  justify-content:flex-end;
+  gap: 10px;
+}
+
+.secondary{
+  border: 1px solid rgba(0,0,0,.12);
+  background:#fff;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 900;
+  cursor:pointer;
+}
+
+.primary{
+  border:none;
+  background:#1dbf73;
+  color:#0b1b11;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 950;
+  cursor:pointer;
+}
+.primary:disabled{ opacity:.6; cursor:not-allowed; }
+
+.danger{
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(239,68,68,.18);
+  background: rgba(239,68,68,.06);
+}
+
+.dangerTitle{ font-weight: 950; }
+.dangerSub{ font-size: 12px; opacity:.75; margin-top: 2px; }
+
+.dangerBtn{
+  margin-top: 10px;
+  width: 100%;
+  border: 1px solid rgba(239,68,68,.35);
+  background: rgba(255,255,255,.9);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 950;
+  cursor: pointer;
+  color: #991b1b;
+}
+.dangerBtn:disabled{ opacity:.6; cursor:not-allowed; }
