@@ -86,7 +86,6 @@ export default function PublicCheckinPage() {
     if (!fullName.trim()) return setError("Ingresa tu nombre.");
     if (!rut.trim()) return setError("Ingresa tu RUT.");
     if (!sigRef.current || sigRef.current.isEmpty()) return setError("Falta tu firma 👇");
-
     if (isClosed) return setError("Esta charla está cerrada.");
 
     const signature_data_url = sigRef.current.getTrimmedCanvas().toDataURL("image/png");
@@ -114,7 +113,6 @@ export default function PublicCheckinPage() {
       setRole("");
       sigRef.current?.clear();
 
-      // refresca por si justo se cerró
       loadSession();
     } catch (e: any) {
       setError(e?.message || "Error");
@@ -146,10 +144,18 @@ export default function PublicCheckinPage() {
 
         {session && (
           <div className={styles.info}>
-            <div><b>Charla:</b> {session.topic || "—"}</div>
-            <div><b>Relator:</b> {session.trainer_name || "—"}</div>
-            <div><b>Fecha:</b> {fmtCL(session.session_date)}</div>
-            <div><b>Lugar:</b> {session.location || "—"}</div>
+            <div>
+              <b>Charla:</b> {session.topic || "—"}
+            </div>
+            <div>
+              <b>Relator:</b> {session.trainer_name || "—"}
+            </div>
+            <div>
+              <b>Fecha:</b> {fmtCL(session.session_date)}
+            </div>
+            <div>
+              <b>Lugar:</b> {session.location || "—"}
+            </div>
             <div>
               <b>Estado:</b>{" "}
               <span className={`${styles.badge} ${isClosed ? styles.badgeClosed : styles.badgeOpen}`}>
@@ -198,9 +204,7 @@ export default function PublicCheckinPage() {
             <div className={styles.sigWrap}>
               {mounted ? (
                 <SignatureCanvas
-                  ref={(r) => {
-  sigRef.current = r;
-}}
+                  ref={sigRef}
                   canvasProps={{
                     width: 900,
                     height: 220,
@@ -234,9 +238,7 @@ export default function PublicCheckinPage() {
           </div>
         </div>
 
-        <div className={styles.footer}>
-          Si tienes problemas, recarga la página o vuelve a escanear el QR.
-        </div>
+        <div className={styles.footer}>Si tienes problemas, recarga la página o vuelve a escanear el QR.</div>
       </div>
     </div>
   );
