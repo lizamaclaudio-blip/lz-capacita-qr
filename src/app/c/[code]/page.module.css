@@ -1,0 +1,165 @@
+.page{
+  min-height: 100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 16px;
+  background:
+    radial-gradient(900px 480px at 25% 0%, rgba(29,191,115,0.10), transparent 60%),
+    linear-gradient(180deg, #f6fafc 0%, #eef4f7 100%);
+}
+
+.card{
+  width: min(560px, 100%);
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 18px;
+  box-shadow: 0 16px 50px rgba(0,0,0,.10);
+  padding: 14px;
+}
+
+.brandRow{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 16px;
+  background: rgba(0,0,0,.02);
+  border: 1px solid rgba(0,0,0,.06);
+}
+
+.logo{
+  width: 74px;
+  height: 44px;
+  object-fit: contain;
+  display:block;
+}
+
+.brandTitle{ font-weight: 950; }
+.brandSub{ font-size: 12px; opacity:.7; font-weight: 800; }
+
+.header{ margin-top: 12px; }
+.h1{ font-weight: 950; font-size: 18px; }
+.sub{ margin-top: 4px; font-size: 12px; opacity:.75; }
+
+.error{
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background:#fff1f1;
+  border:1px solid #ffd0d0;
+  color:#9b1c1c;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.ok{
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(29,191,115,.12);
+  border: 1px solid rgba(29,191,115,.25);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.info{
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,.08);
+  background: rgba(255,255,255,0.92);
+  font-size: 12px;
+  opacity: .88;
+  display:flex;
+  flex-direction:column;
+  gap: 4px;
+}
+
+.badge{
+  display:inline-block;
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 950;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.08);
+}
+.badgeOpen{
+  background: rgba(59,130,246,.10);
+  border-color: rgba(59,130,246,.20);
+}
+.badgeClosed{
+  background: rgba(239,68,68,.10);
+  border-color: rgba(239,68,68,.20);
+}
+
+.form{ margin-top: 12px; display:flex; flex-direction:column; gap: 10px; }
+
+.field{ display:flex; flex-direction:column; gap: 6px; }
+.label{ font-size: 12px; font-weight: 900; opacity:.75; }
+
+.input{
+  border:1px solid rgba(0,0,0,.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  outline:none;
+  background:#fff;
+  font-size: 15px;
+}
+.input:focus{
+  border-color: rgba(29,191,115,.7);
+  box-shadow: 0 0 0 3px rgba(29,191,115,.18);
+}
+
+.sigWrap{
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 14px;
+  overflow:hidden;
+  background: #fff;
+}
+
+/* ✅ clave para firmar en móvil sin que se “mueva” la página */
+.sigCanvas{
+  width: 100% !important;
+  height: 220px !important;
+  touch-action: none;
+}
+
+.sigPlaceholder{ height: 220px; width: 100%; background: rgba(0,0,0,.03); }
+
+.sigActions{
+  display:flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.secondaryBtn{
+  flex:1;
+  border:1px solid rgba(0,0,0,.12);
+  background:#fff;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 950;
+  cursor:pointer;
+}
+
+.primaryBtn{
+  flex:1;
+  border:none;
+  background:#1dbf73;
+  color:#0b1b11;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 950;
+  cursor:pointer;
+}
+
+.secondaryBtn:disabled,
+.primaryBtn:disabled{ opacity:.6; cursor:not-allowed; }
+
+.footer{
+  margin-top: 12px;
+  font-size: 12px;
+  opacity: .65;
+}

@@ -3,13 +3,13 @@
   "name": "lz-capacita-qr",
   "version": "0.1.0",
   "private": true,
-"scripts": {
-  "dev": "next dev --webpack",
-  "build": "next build --webpack",
-  "start": "next start",
-  "lint": "next lint"
-},
-"dependencies": {
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
     "framer-motion": "^12.34.2",
     "lucide-react": "^0.575.0",
