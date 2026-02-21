@@ -1,15 +1,27 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
-export default function LoginPage() {
+function safeNext(next: string | null) {
+  if (!next) return null;
+  // solo rutas internas
+  if (next.startsWith("/") && !next.startsWith("//")) return next;
+  return null;
+}
+
+function LoginInner() {
   const router = useRouter();
+  const sp = useSearchParams();
+
+  const next = safeNext(sp.get("next"));
+  const eParam = sp.get("e");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(eParam ? decodeURIComponent(eParam) : null);
 
   async function handleLogin() {
     if (loading) return;
@@ -30,7 +42,7 @@ export default function LoginPage() {
       }
 
       setLoading(false);
-      router.replace("/app");
+      router.replace(next || "/app");
     } catch (e: any) {
       setLoading(false);
       setErr(e?.message || "Error inesperado al iniciar sesión");
@@ -92,5 +104,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 20, opacity: 0.7 }}>Cargando…</div>}>
+      <LoginInner />
+    </Suspense>
   );
 }

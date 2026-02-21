@@ -7,30 +7,19 @@ import { supabaseBrowser } from "@/lib/supabase/browser";
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
     let alive = true;
 
     (async () => {
-      // OJO: /admin/s/[code] lo dejamos público (se protege con passcode en endpoints)
-      const isAdminOnlyPage = pathname.startsWith("/admin/new");
-
-      if (!isAdminOnlyPage) {
-        if (!alive) return;
-        setChecking(false);
-        return;
-      }
-
-      // Si es /admin/new, exigimos login + is_admin
       const { data } = await supabaseBrowser.auth.getSession();
       const session = data.session;
 
       if (!alive) return;
 
       if (!session?.access_token) {
-        router.replace("/login?e=" + encodeURIComponent("Debes iniciar sesión."));
+        router.replace(`/login?next=${encodeURIComponent(pathname)}`);
         return;
       }
 
@@ -54,9 +43,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     };
   }, [pathname, router]);
 
-  if (checking) {
-    return <div style={{ padding: 20, opacity: 0.7 }}>Cargando…</div>;
-  }
+  if (checking) return <div style={{ padding: 20, opacity: 0.7 }}>Cargando…</div>;
 
   return <>{children}</>;
 }

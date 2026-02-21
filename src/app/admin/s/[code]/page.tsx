@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState, useRef } from "react";
+import { supabaseBrowser } from "@/lib/supabase/browser";
 import { SignaturePad, type SignaturePadRef } from "@/components/SignaturePad";
 
 export default function AdminSession() {
@@ -9,39 +10,54 @@ export default function AdminSession() {
   const raw = (params?.code ?? "") as unknown as string | string[];
   const code = (Array.isArray(raw) ? raw[0] : raw).toUpperCase().trim();
 
-  const [passcode, setPasscode] = useState("");
+  const [token, setToken] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
+
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const sigRef = useRef<SignaturePadRef | null>(null);
-
   const [closing, setClosing] = useState(false);
   const [closeMsg, setCloseMsg] = useState<string | null>(null);
 
-  // PDF
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfMsg, setPdfMsg] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
 
   useEffect(() => {
-    setPdfUrl(null);
-    setPdfMsg(null);
-    setCloseMsg(null);
-    setErr(null);
-  }, [code]);
+    let mounted = true;
+
+    supabaseBrowser.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      const s = data.session;
+      setToken(s?.access_token ?? null);
+      setEmail(s?.user?.email ?? null);
+    });
+
+    const { data: sub } = supabaseBrowser.auth.onAuthStateChange((_evt, session) => {
+      setToken(session?.access_token ?? null);
+      setEmail(session?.user?.email ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   async function load() {
     setErr(null);
+    setCloseMsg(null);
 
-    if (!passcode) {
-      setErr("Ingresa passcode admin");
+    if (!token) {
+      setErr("Debes iniciar sesión.");
       return;
     }
 
-    const res = await fetch(
-      `/api/admin/attendees?code=${encodeURIComponent(code)}&passcode=${encodeURIComponent(passcode)}`,
-      { cache: "no-store" }
-    );
+    const res = await fetch(`/api/admin/attendees?code=${encodeURIComponent(code)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
 
     const json = await res.json().catch(() => null);
 
@@ -55,31 +71,33 @@ export default function AdminSession() {
   }
 
   useEffect(() => {
-    if (!passcode) return;
+    if (!token) return;
 
     load();
     const t = setInterval(load, 3000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passcode, code]);
+  }, [token, code]);
 
   async function closeSession() {
     setCloseMsg(null);
     setErr(null);
 
-    if (!passcode) return setCloseMsg("Falta passcode");
+    if (!token) return setCloseMsg("Debes iniciar sesión.");
     if (!sigRef.current || sigRef.current.isEmpty()) return setCloseMsg("Falta firma del relator 👇");
 
     const trainer_signature_data_url = sigRef.current.toPngDataUrl();
-    if (!trainer_signature_data_url) return setCloseMsg("No se pudo capturar la firma. Intenta de nuevo.");
+    if (!trainer_signature_data_url) return setCloseMsg("No se pudo capturar la firma.");
 
     setClosing(true);
-
     try {
       const res = await fetch("/api/admin/close-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ passcode, code, trainer_signature_data_url }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ code, trainer_signature_data_url }),
       });
 
       const json = await res.json().catch(() => null);
@@ -92,8 +110,6 @@ export default function AdminSession() {
       setCloseMsg("✅ Charla cerrada con firma del relator.");
       sigRef.current?.clear();
       await load();
-    } catch (e: any) {
-      setCloseMsg(e?.message || "Error cerrando charla");
     } finally {
       setClosing(false);
     }
@@ -104,14 +120,17 @@ export default function AdminSession() {
     setPdfUrl(null);
     setErr(null);
 
-    if (!passcode) return setPdfMsg("Falta passcode");
+    if (!token) return setPdfMsg("Debes iniciar sesión.");
 
     setPdfLoading(true);
     try {
       const res = await fetch("/api/admin/generate-pdf", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ passcode, code }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ code }),
       });
 
       const json = await res.json().catch(() => null);
@@ -125,11 +144,13 @@ export default function AdminSession() {
       setPdfUrl(json?.signed_url || null);
 
       if (json?.signed_url) window.open(json.signed_url, "_blank", "noopener,noreferrer");
-    } catch (e: any) {
-      setPdfMsg(e?.message || "Error generando PDF");
     } finally {
       setPdfLoading(false);
     }
+  }
+
+  async function logout() {
+    await supabaseBrowser.auth.signOut();
   }
 
   const session = data?.session;
@@ -139,82 +160,47 @@ export default function AdminSession() {
 
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: 20, display: "grid", gap: 14 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>Admin · Asistentes</h1>
-      <div style={{ fontSize: 13, opacity: 0.8 }}>
-        Código: <b>{code}</b>
-      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>Admin · Asistentes</h1>
+          <div style={{ fontSize: 13, opacity: 0.8 }}>
+            Código: <b>{code}</b>
+          </div>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>
+            Sesión: <b>{email || "—"}</b>
+          </div>
+        </div>
 
-      <div style={{ display: "flex", gap: 10 }}>
-        <input
-          style={{ flex: 1, border: "1px solid rgba(0,0,0,.15)", borderRadius: 12, padding: "10px 12px" }}
-          placeholder="Passcode admin"
-          value={passcode}
-          onChange={(e) => setPasscode(e.target.value)}
-        />
         <button
+          onClick={logout}
           style={{
             borderRadius: 12,
-            padding: "10px 14px",
-            border: "none",
-            background: "#0b1220",
-            color: "#fff",
+            padding: "10px 12px",
+            border: "1px solid rgba(0,0,0,.12)",
+            background: "#fff",
             fontWeight: 900,
             cursor: "pointer",
           }}
-          onClick={load}
         >
-          Cargar
+          Cerrar sesión
         </button>
       </div>
 
       {err && (
-        <div
-          style={{
-            padding: "10px 12px",
-            borderRadius: 12,
-            background: "#fff1f1",
-            border: "1px solid #ffd0d0",
-            color: "#9b1c1c",
-            fontWeight: 850,
-          }}
-        >
+        <div style={{ padding: "10px 12px", borderRadius: 12, background: "#fff1f1", border: "1px solid #ffd0d0", color: "#9b1c1c", fontWeight: 850 }}>
           {err}
         </div>
       )}
 
       {session && (
-        <div
-          style={{
-            border: "1px solid rgba(0,0,0,.10)",
-            borderRadius: 14,
-            padding: 12,
-            fontSize: 13,
-            display: "grid",
-            gap: 4,
-          }}
-        >
-          <div>
-            <b>Empresa:</b> {session.companies?.name}
-          </div>
-          <div>
-            <b>Dirección:</b> {session.companies?.address || "-"}
-          </div>
-          <div>
-            <b>Charla:</b> {session.topic}
-          </div>
-          <div>
-            <b>Lugar:</b> {session.location || "-"}
-          </div>
-          <div>
-            <b>Relator:</b> {session.trainer_name}
-          </div>
-          <div>
-            <b>Estado:</b> {status}
-            {session.closed_at ? ` (cerrada: ${new Date(session.closed_at).toLocaleString("es-CL")})` : ""}
-          </div>
-          <div>
-            <b>Total asistentes:</b> {attendees.length}
-          </div>
+        <div style={{ border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: 12, fontSize: 13, display: "grid", gap: 4 }}>
+          <div><b>Empresa:</b> {session.companies?.name}</div>
+          <div><b>Dirección:</b> {session.companies?.address || "-"}</div>
+          <div><b>Charla:</b> {session.topic}</div>
+          <div><b>Lugar:</b> {session.location || "-"}</div>
+          <div><b>Relator:</b> {session.trainer_name}</div>
+          <div><b>Estado:</b> {status}{session.closed_at ? ` (cerrada: ${new Date(session.closed_at).toLocaleString("es-CL")})` : ""}</div>
+          <div><b>Total asistentes:</b> {attendees.length}</div>
         </div>
       )}
 
@@ -238,26 +224,14 @@ export default function AdminSession() {
               </tr>
             ))}
             {!attendees.length && (
-              <tr>
-                <td style={{ padding: 10 }} colSpan={4}>
-                  Aún no hay asistentes…
-                </td>
-              </tr>
+              <tr><td style={{ padding: 10 }} colSpan={4}>Aún no hay asistentes…</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
       {session && isOpen && (
-        <div
-          style={{
-            border: "1px solid rgba(0,0,0,.10)",
-            borderRadius: 14,
-            padding: 12,
-            display: "grid",
-            gap: 10,
-          }}
-        >
+        <div style={{ border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: 12, display: "grid", gap: 10 }}>
           <div style={{ fontWeight: 950 }}>Cerrar charla (firma relator)</div>
 
           <div style={{ border: "1px solid rgba(0,0,0,.12)", borderRadius: 14, overflow: "hidden", background: "#fff" }}>
@@ -266,34 +240,15 @@ export default function AdminSession() {
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
-              style={{
-                flex: 1,
-                minWidth: 160,
-                borderRadius: 12,
-                padding: "10px 12px",
-                border: "1px solid rgba(0,0,0,.12)",
-                background: "#fff",
-                fontWeight: 900,
-                cursor: "pointer",
-              }}
+              style={{ flex: 1, minWidth: 160, borderRadius: 12, padding: "10px 12px", border: "1px solid rgba(0,0,0,.12)", background: "#fff", fontWeight: 900, cursor: "pointer" }}
               onClick={() => sigRef.current?.clear()}
+              disabled={closing}
             >
               Limpiar firma
             </button>
 
             <button
-              style={{
-                flex: 1,
-                minWidth: 160,
-                borderRadius: 12,
-                padding: "10px 12px",
-                border: "none",
-                background: "#0b1220",
-                color: "#fff",
-                fontWeight: 950,
-                cursor: "pointer",
-                opacity: closing ? 0.7 : 1,
-              }}
+              style={{ flex: 1, minWidth: 160, borderRadius: 12, padding: "10px 12px", border: "none", background: "#0b1220", color: "#fff", fontWeight: 950, cursor: "pointer", opacity: closing ? 0.7 : 1 }}
               disabled={closing}
               onClick={closeSession}
             >
@@ -306,28 +261,11 @@ export default function AdminSession() {
       )}
 
       {session && !isOpen && (
-        <div
-          style={{
-            border: "1px solid rgba(0,0,0,.10)",
-            borderRadius: 14,
-            padding: 12,
-            display: "grid",
-            gap: 10,
-          }}
-        >
+        <div style={{ border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: 12, display: "grid", gap: 10 }}>
           <div style={{ fontWeight: 950 }}>PDF del registro</div>
 
           <button
-            style={{
-              borderRadius: 12,
-              padding: "10px 12px",
-              border: "none",
-              background: "#0b1220",
-              color: "#fff",
-              fontWeight: 950,
-              cursor: "pointer",
-              opacity: pdfLoading ? 0.7 : 1,
-            }}
+            style={{ borderRadius: 12, padding: "10px 12px", border: "none", background: "#0b1220", color: "#fff", fontWeight: 950, cursor: "pointer", opacity: pdfLoading ? 0.7 : 1 }}
             disabled={pdfLoading}
             onClick={generatePdf}
           >
