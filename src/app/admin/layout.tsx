@@ -1,43 +1,61 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [ok, setOk] = useState(false);
+  const pathname = usePathname();
+
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabaseBrowser.auth.getSession();
-      const token = data.session?.access_token;
+    let alive = true;
 
-      if (!token) {
-        router.replace("/login");
+    (async () => {
+      // OJO: /admin/s/[code] lo dejamos público (se protege con passcode en endpoints)
+      const isAdminOnlyPage = pathname.startsWith("/admin/new");
+
+      if (!isAdminOnlyPage) {
+        if (!alive) return;
+        setChecking(false);
         return;
       }
 
-      const res = await fetch("/api/app/me", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const json = await res.json();
+      // Si es /admin/new, exigimos login + is_admin
+      const { data } = await supabaseBrowser.auth.getSession();
+      const session = data.session;
 
-      if (!res.ok || !json?.is_admin) {
+      if (!alive) return;
+
+      if (!session?.access_token) {
+        router.replace("/login?e=" + encodeURIComponent("Debes iniciar sesión."));
+        return;
+      }
+
+      const meRes = await fetch("/api/app/me", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+
+      const meJson = await meRes.json().catch(() => null);
+
+      if (!meRes.ok || !meJson?.is_admin) {
         router.replace("/app?e=" + encodeURIComponent("No tienes permisos de admin."));
         return;
       }
 
-      setOk(true);
+      setChecking(false);
     })();
-  }, [router]);
 
-  if (!ok) {
-    return (
-      <div className="min-h-screen flex items-center justify-center opacity-70">
-        Verificando permisos…
-      </div>
-    );
+    return () => {
+      alive = false;
+    };
+  }, [pathname, router]);
+
+  if (checking) {
+    return <div style={{ padding: 20, opacity: 0.7 }}>Cargando…</div>;
   }
 
   return <>{children}</>;

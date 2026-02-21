@@ -1,16 +1,63 @@
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseServer } from "@/lib/supabase/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import path from "path";
 import { readFile } from "fs/promises";
 
+/** Body */
 const BodySchema = z.object({
   code: z.string().min(3),
+  passcode: z.string().optional().nullable(),
 });
 
+/** Auth helpers */
+function getBearer(req: NextRequest) {
+  const auth = req.headers.get("authorization") || "";
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  return m?.[1] || null;
+}
+
+function adminEmails() {
+  return (process.env.ADMIN_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+async function isAdminByBearer(req: NextRequest) {
+  const token = getBearer(req);
+  if (!token) return false;
+
+  const sb = supabaseServer();
+  const { data, error } = await sb.auth.getUser(token);
+
+  if (error || !data?.user?.email) return false;
+  const email = data.user.email.toLowerCase();
+
+  return adminEmails().includes(email);
+}
+
+async function requireAdmin(req: NextRequest, passcode?: string | null) {
+  // 1) Si viene bearer y es admin -> OK
+  if (await isAdminByBearer(req)) return { ok: true as const };
+
+  // 2) Si no, validamos passcode
+  const pc = String(passcode || "");
+  if (!process.env.ADMIN_PASSCODE) {
+    return { ok: false as const, status: 500, error: "Falta ADMIN_PASSCODE en env" };
+  }
+  if (!pc || pc !== process.env.ADMIN_PASSCODE) {
+    return { ok: false as const, status: 401, error: "Passcode incorrecto" };
+  }
+
+  return { ok: true as const };
+}
+
+/** Storage download */
 async function downloadStorageBytes(pathInBucket: string) {
   const sb = supabaseServer();
   const { data, error } = await sb.storage.from("assets").download(pathInBucket);
@@ -25,7 +72,9 @@ function clampText(text: string, max: number) {
 }
 
 function normalizeRut(rut: any) {
-  return String(rut ?? "").replace(/[^0-9kK]/g, "").toUpperCase();
+  return String(rut ?? "")
+    .replace(/[^0-9kK]/g, "")
+    .toUpperCase();
 }
 
 function formatRutPretty(rut: any) {
@@ -98,11 +147,14 @@ function fitWithEllipsis(str: string, font: any, size: number, maxWidth: number)
   return s.length ? s + ell : ell;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const json = await req.json().catch(() => null);
     const parsed = BodySchema.safeParse(json);
     if (!parsed.success) return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+
+    const auth = await requireAdmin(req, parsed.data.passcode);
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
     const code = parsed.data.code.toUpperCase().trim();
     const sb = supabaseServer();
@@ -111,7 +163,7 @@ export async function POST(req: Request) {
     const { data: session, error: sErr } = await sb
       .from("sessions")
       .select(
-        "id, code, topic, location, session_date, trainer_name, status, closed_at, trainer_signature_path, pdf_path, companies(name, address)"
+        "id, code, topic, location, session_date, trainer_name, status, closed_at, trainer_signature_path, companies(name, address)"
       )
       .eq("code", code)
       .single();
@@ -157,10 +209,10 @@ export async function POST(req: Request) {
     const margin = 36;
     const contentW = pageW - margin * 2;
 
-    // Logo marca
+    // ✅ Logo: prueba brand primero (tu archivo real), luego fallback
     let brandLogo: any = null;
     try {
-      const logoPathNew = path.join(process.cwd(), "public", "brand", "logo-horizontal.png");
+      const logoPathNew = path.join(process.cwd(), "public", "brand", "lz-capacita-qr.png");
       const bytes = await readFile(logoPathNew);
       brandLogo = await pdfDoc.embedPng(bytes);
     } catch {
@@ -196,7 +248,7 @@ export async function POST(req: Request) {
       });
     };
 
-    // HEADER
+    // ===== HEADER =====
     const headerH = 90;
     const headerBottom = y - headerH;
     drawBox(margin, headerBottom, contentW, headerH, 1);
@@ -204,7 +256,6 @@ export async function POST(req: Request) {
     if (brandLogo) {
       const logoH = 52;
       const logoW = (brandLogo.width / brandLogo.height) * logoH;
-
       page.drawImage(brandLogo, {
         x: margin + 12,
         y: headerBottom + headerH - logoH - 18,
@@ -218,7 +269,7 @@ export async function POST(req: Request) {
 
     y = headerBottom + headerH - 22;
     page.drawText("REGISTRO DE ASISTENCIA – CHARLA", {
-      x: brandLogo ? margin + 12 + 220 : margin + 12,
+      x: brandLogo ? margin + 12 + 220 : leftX,
       y,
       size: 14,
       font: fontBold,
@@ -243,7 +294,7 @@ export async function POST(req: Request) {
 
     y = headerBottom - 18;
 
-    // TABLA
+    // ===== TABLA =====
     const col = {
       n: 20,
       nombre: 165,
@@ -313,6 +364,7 @@ export async function POST(req: Request) {
 
     for (let i = 0; i < (attendees?.length ?? 0); i++) {
       ensureSpace(rowH);
+
       const a: any = attendees![i];
 
       drawBox(x0, y - rowH, contentW, rowH, 1);
@@ -324,7 +376,14 @@ export async function POST(req: Request) {
       drawLine(xFirma, y, xFirma, y - rowH);
 
       page.drawText(String(i + 1), { x: xN + 6, y: y - 16, size: 9, font });
-      page.drawText(clampText(a.full_name ?? "", 30), { x: xNombre + 6, y: y - 16, size: 9, font });
+
+      page.drawText(clampText(a.full_name ?? "", 30), {
+        x: xNombre + 6,
+        y: y - 16,
+        size: 9,
+        font,
+      });
+
       page.drawText(formatRutPretty(a.rut), { x: xRut + 6, y: y - 16, size: 9, font });
 
       const cargoX = xCargo + 6;
@@ -339,7 +398,9 @@ export async function POST(req: Request) {
       }
 
       page.drawText(cargoLines[0], { x: cargoX, y: y - 16, size: cargoSize, font });
-      if (cargoLines[1]) page.drawText(cargoLines[1], { x: cargoX, y: y - 16 - cargoLineH, size: cargoSize, font });
+      if (cargoLines[1]) {
+        page.drawText(cargoLines[1], { x: cargoX, y: y - 16 - cargoLineH, size: cargoSize, font });
+      }
 
       const { date, time } = formatDateParts(a.created_at);
       page.drawText(clampText(date, 14), { x: xHora + 6, y: y - 16, size: 8, font });
@@ -372,7 +433,7 @@ export async function POST(req: Request) {
       y -= rowH;
     }
 
-    // Firma relator
+    // ===== FIRMA RELATOR =====
     ensureSpace(150);
 
     page.drawText("Firma relator:", { x: margin, y: y - 14, size: 11, font: fontBold });
@@ -408,7 +469,7 @@ export async function POST(req: Request) {
     y = relBoxY - 18;
     page.drawText(`Relator: ${(session as any).trainer_name ?? ""}`, { x: margin, y, size: 10, font });
 
-    // Subir PDF
+    // ===== Upload PDF y signed url =====
     const pdfBytes = await pdfDoc.save();
     const pdfPath = `reports/${code}/registro-${Date.now()}.pdf`;
 
@@ -418,14 +479,6 @@ export async function POST(req: Request) {
     });
 
     if (up.error) return NextResponse.json({ error: up.error.message }, { status: 500 });
-
-    // ✅ Guardar pdf_path en sessions (esto habilita el estado "PDF generado")
-    const { error: updErr } = await sb
-      .from("sessions")
-      .update({ pdf_path: pdfPath, pdf_generated_at: new Date().toISOString() })
-      .eq("id", (session as any).id);
-
-    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
     const { data: signed, error: signErr } = await sb.storage.from("assets").createSignedUrl(pdfPath, 60 * 60);
     if (signErr || !signed) {

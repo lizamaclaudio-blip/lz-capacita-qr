@@ -1,21 +1,58 @@
-"use client";
-
 import { useParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import SignatureCanvas from "react-signature-canvas";
-import { supabaseBrowser } from "@/lib/supabase/browser";
 
-type Mode = "authed" | "passcode";
+function trimCanvasToDataURL(canvas: HTMLCanvasElement, padding = 12) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return canvas.toDataURL("image/png");
+
+  const w = canvas.width;
+  const h = canvas.height;
+  const img = ctx.getImageData(0, 0, w, h);
+  const data = img.data;
+
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+
+  // detecta pixeles con alpha > 0
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const a = data[(y * w + x) * 4 + 3];
+      if (a > 0) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  // si no hay nada dibujado
+  if (maxX === -1) return canvas.toDataURL("image/png");
+
+  // padding
+  minX = Math.max(minX - padding, 0);
+  minY = Math.max(minY - padding, 0);
+  maxX = Math.min(maxX + padding, w - 1);
+  maxY = Math.min(maxY + padding, h - 1);
+
+  const outW = maxX - minX + 1;
+  const outH = maxY - minY + 1;
+
+  const out = document.createElement("canvas");
+  out.width = outW;
+  out.height = outH;
+
+  const octx = out.getContext("2d");
+  if (!octx) return canvas.toDataURL("image/png");
+
+  octx.drawImage(canvas, minX, minY, outW, outH, 0, 0, outW, outH);
+  return out.toDataURL("image/png");
+}
 
 export default function AdminSession() {
   const params = useParams<{ code: string }>();
   const raw = (params?.code ?? "") as unknown as string | string[];
-  const code = (Array.isArray(raw) ? raw[0] : raw).toUpperCase();
-
-  const [mode, setMode] = useState<Mode>("passcode");
-
-  const [token, setToken] = useState<string | null>(null);
-  const tokenRef = useRef<string | null>(null);
+  const code = (Array.isArray(raw) ? raw[0] : raw).toUpperCase().trim();
 
   const [passcode, setPasscode] = useState("");
   const [data, setData] = useState<any>(null);
@@ -27,6 +64,7 @@ export default function AdminSession() {
   const [closing, setClosing] = useState(false);
   const [closeMsg, setCloseMsg] = useState<string | null>(null);
 
+  // PDF
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfMsg, setPdfMsg] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -36,135 +74,77 @@ export default function AdminSession() {
   useEffect(() => {
     setPdfUrl(null);
     setPdfMsg(null);
-    setData(null);
-    setErr(null);
     setCloseMsg(null);
+    setErr(null);
   }, [code]);
 
-  useEffect(() => {
-    let alive = true;
-
-    async function boot() {
-      const { data } = await supabaseBrowser.auth.getSession();
-      const t = data.session?.access_token ?? null;
-
-      if (!alive) return;
-
-      setToken(t);
-      tokenRef.current = t;
-      setMode(t ? "authed" : "passcode");
-    }
-
-    boot();
-
-    const { data: sub } = supabaseBrowser.auth.onAuthStateChange((_evt, session) => {
-      const t = session?.access_token ?? null;
-      setToken(t);
-      tokenRef.current = t;
-      setMode(t ? "authed" : "passcode");
-    });
-
-    return () => {
-      alive = false;
-      sub?.subscription?.unsubscribe();
-    };
-  }, []);
-
-  async function loadAuthed() {
+  async function load() {
     setErr(null);
 
-    const t = tokenRef.current ?? token;
-    if (!t) {
-      setErr("No hay sesión activa. Usa passcode.");
-      setMode("passcode");
+    if (!passcode) {
+      setErr("Ingresa passcode admin");
       return;
     }
-
-    const res = await fetch(`/api/app/admin/attendees?code=${encodeURIComponent(code)}`, {
-      headers: { Authorization: `Bearer ${t}` },
-      cache: "no-store",
-    });
-
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-      setErr(json?.error || "No pude cargar por sesión. Usa passcode.");
-      setMode("passcode");
-      return;
-    }
-
-    setData(json);
-  }
-
-  async function loadPasscode() {
-    setErr(null);
-    if (!passcode) return setErr("Falta passcode");
 
     const res = await fetch(
       `/api/admin/attendees?code=${encodeURIComponent(code)}&passcode=${encodeURIComponent(passcode)}`,
       { cache: "no-store" }
     );
+
     const json = await res.json().catch(() => null);
-    if (!res.ok) return setErr(json?.error || "Error");
+
+    if (!res.ok) {
+      setData(null);
+      setErr(json?.error || "Error cargando asistentes");
+      return;
+    }
+
     setData(json);
   }
 
   useEffect(() => {
-    if (mode === "authed") {
-      loadAuthed();
-      const t = setInterval(() => loadAuthed(), 3000);
-      return () => clearInterval(t);
-    }
-
     if (!passcode) return;
-    loadPasscode();
-    const t = setInterval(() => loadPasscode(), 3000);
-    return () => clearInterval(t);
 
+    load();
+    const t = setInterval(load, 3000);
+    return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, passcode, code]);
+  }, [passcode, code]);
 
   async function closeSession() {
     setCloseMsg(null);
+    setErr(null);
 
     const sig = sigRef.current;
+
+    if (!passcode) return setCloseMsg("Falta passcode");
     if (!sig || sig.isEmpty()) return setCloseMsg("Falta firma del relator 👇");
 
-    const trainer_signature_data_url = sig.getTrimmedCanvas().toDataURL("image/png");
     setClosing(true);
 
     try {
-      // ✅ AUTENTICADO: Bearer
-      if (mode === "authed" && (tokenRef.current ?? token)) {
-        const t = tokenRef.current ?? token;
-        const res = await fetch("/api/admin/close-session", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${t}`,
-          },
-          body: JSON.stringify({ code, trainer_signature_data_url }),
-        });
+      // ✅ NO usar getTrimmedCanvas(); lo recortamos nosotros
+      const canvas = sig.getCanvas();
+      const trainer_signature_data_url = trimCanvasToDataURL(canvas, 14);
 
-        const json = await res.json().catch(() => null);
-        if (!res.ok) return setCloseMsg(json?.error || "Error");
-        setCloseMsg("✅ Charla cerrada con firma del relator.");
-        sig.clear();
-        loadAuthed();
-        return;
-      }
-
-      // 🔒 PASSCODE
-      if (!passcode) return setCloseMsg("Falta passcode");
       const res = await fetch("/api/admin/close-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ passcode, code, trainer_signature_data_url }),
       });
+
       const json = await res.json().catch(() => null);
-      if (!res.ok) return setCloseMsg(json?.error || "Error");
+
+      if (!res.ok) {
+        setCloseMsg(json?.error || "Error cerrando charla");
+        return;
+      }
+
       setCloseMsg("✅ Charla cerrada con firma del relator.");
       sig.clear();
-      loadPasscode();
+      await load();
+    } catch (e: any) {
+      setCloseMsg(e?.message || "Error cerrando charla");
     } finally {
       setClosing(false);
     }
@@ -173,30 +153,12 @@ export default function AdminSession() {
   async function generatePdf() {
     setPdfMsg(null);
     setPdfUrl(null);
+    setErr(null);
+
+    if (!passcode) return setPdfMsg("Falta passcode");
 
     setPdfLoading(true);
     try {
-      // ✅ AUTENTICADO: Bearer
-      if (mode === "authed" && (tokenRef.current ?? token)) {
-        const t = tokenRef.current ?? token;
-        const res = await fetch("/api/admin/generate-pdf", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${t}`,
-          },
-          body: JSON.stringify({ code }),
-        });
-
-        const json = await res.json().catch(() => null);
-        if (!res.ok) return setPdfMsg(json?.error || "Error generando PDF");
-        setPdfMsg("✅ PDF generado.");
-        setPdfUrl(json?.signed_url ?? null);
-        return;
-      }
-
-      // 🔒 PASSCODE
-      if (!passcode) return setPdfMsg("Falta passcode");
       const res = await fetch("/api/admin/generate-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -204,9 +166,19 @@ export default function AdminSession() {
       });
 
       const json = await res.json().catch(() => null);
-      if (!res.ok) return setPdfMsg(json?.error || "Error generando PDF");
+
+      if (!res.ok) {
+        setPdfMsg(json?.error || "Error generando PDF");
+        return;
+      }
+
       setPdfMsg("✅ PDF generado.");
-      setPdfUrl(json?.signed_url ?? null);
+      setPdfUrl(json?.signed_url || null);
+
+      // opcional: abrir automáticamente
+      if (json?.signed_url) window.open(json.signed_url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      setPdfMsg(e?.message || "Error generando PDF");
     } finally {
       setPdfLoading(false);
     }
@@ -215,47 +187,38 @@ export default function AdminSession() {
   const session = data?.session;
   const attendees = data?.attendees ?? [];
   const status = session?.status ?? "—";
+  const isOpen = String(status).toLowerCase() === "open";
 
   return (
-    <div style={{ maxWidth: 980, margin: "0 auto", padding: 16 }}>
-      <h1 style={{ fontSize: 22, fontWeight: 900 }}>Admin · Asistentes</h1>
-      <p style={{ opacity: 0.75, marginTop: 6 }}>
-        Código: <b>{code}</b>{" "}
-        <span style={{ marginLeft: 10, padding: "4px 10px", borderRadius: 999, border: "1px solid rgba(0,0,0,.12)" }}>
-          {mode === "authed" ? "✅ Acceso por sesión" : "🔒 Acceso por passcode"}
-        </span>
-      </p>
+    <div style={{ maxWidth: 980, margin: "0 auto", padding: 20, display: "grid", gap: 14 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>Admin · Asistentes</h1>
+      <div style={{ fontSize: 13, opacity: 0.8 }}>
+        Código: <b>{code}</b>
+      </div>
 
-      {mode === "passcode" && (
-        <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-          <input
-            style={{ flex: 1, border: "1px solid rgba(0,0,0,.12)", borderRadius: 12, padding: "10px 12px" }}
-            placeholder="Passcode admin"
-            value={passcode}
-            onChange={(e) => setPasscode(e.target.value)}
-          />
-          <button style={{ borderRadius: 12, padding: "10px 14px", fontWeight: 900, cursor: "pointer" }} onClick={loadPasscode}>
-            Cargar
-          </button>
-        </div>
-      )}
-
-      {mode === "authed" && (
-        <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-          <button style={{ borderRadius: 12, padding: "10px 14px", fontWeight: 900, cursor: "pointer" }} onClick={loadAuthed}>
-            Actualizar
-          </button>
-        </div>
-      )}
+      <div style={{ display: "flex", gap: 10 }}>
+        <input
+          style={{ flex: 1, border: "1px solid rgba(0,0,0,.15)", borderRadius: 12, padding: "10px 12px" }}
+          placeholder="Passcode admin"
+          value={passcode}
+          onChange={(e) => setPasscode(e.target.value)}
+        />
+        <button
+          style={{ borderRadius: 12, padding: "10px 14px", border: "none", background: "#0b1220", color: "#fff", fontWeight: 900, cursor: "pointer" }}
+          onClick={load}
+        >
+          Cargar
+        </button>
+      </div>
 
       {err && (
-        <div style={{ marginTop: 12, padding: 10, borderRadius: 12, background: "#fff1f1", border: "1px solid #ffd0d0", color: "#9b1c1c", fontWeight: 900 }}>
+        <div style={{ padding: "10px 12px", borderRadius: 12, background: "#fff1f1", border: "1px solid #ffd0d0", color: "#9b1c1c", fontWeight: 850 }}>
           {err}
         </div>
       )}
 
       {session && (
-        <div style={{ marginTop: 12, padding: 12, borderRadius: 12, border: "1px solid rgba(0,0,0,.12)", background: "#fff" }}>
+        <div style={{ border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: 12, fontSize: 13, display: "grid", gap: 4 }}>
           <div><b>Empresa:</b> {session.companies?.name}</div>
           <div><b>Dirección:</b> {session.companies?.address || "-"}</div>
           <div><b>Charla:</b> {session.topic}</div>
@@ -266,7 +229,7 @@ export default function AdminSession() {
         </div>
       )}
 
-      <div style={{ marginTop: 12, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(0,0,0,.12)", background: "#fff" }}>
+      <div style={{ border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, overflow: "hidden" }}>
         <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
           <thead style={{ background: "rgba(0,0,0,.03)" }}>
             <tr>
@@ -278,7 +241,7 @@ export default function AdminSession() {
           </thead>
           <tbody>
             {attendees.map((a: any, i: number) => (
-              <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,.06)" }}>
+              <tr key={i} style={{ borderTop: "1px solid rgba(0,0,0,.08)" }}>
                 <td style={{ padding: 10 }}>{a.full_name}</td>
                 <td style={{ padding: 10 }}>{a.rut}</td>
                 <td style={{ padding: 10 }}>{a.role || "-"}</td>
@@ -296,66 +259,63 @@ export default function AdminSession() {
         </table>
       </div>
 
-      {session && session.status === "open" && (
-        <div style={{ marginTop: 14, padding: 14, borderRadius: 12, border: "1px solid rgba(0,0,0,.12)", background: "#fff" }}>
-          <h2 style={{ fontWeight: 950 }}>Cerrar charla (firma relator)</h2>
+      {/* Cerrar charla */}
+      {session && isOpen && (
+        <div style={{ border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: 12, display: "grid", gap: 10 }}>
+          <div style={{ fontWeight: 950 }}>Cerrar charla (firma relator)</div>
 
-          <div style={{ marginTop: 10, borderRadius: 12, overflow: "hidden", border: "1px solid rgba(0,0,0,.12)" }}>
+          <div style={{ border: "1px solid rgba(0,0,0,.12)", borderRadius: 14, overflow: "hidden", background: "#fff" }}>
             {mounted ? (
               <SignatureCanvas
-                ref={(r) => {
-                  sigRef.current = r;
-                }}
-                canvasProps={{ width: 900, height: 200, className: "w-full h-[200px]" }}
+                ref={sigRef}
+                canvasProps={{ width: 900, height: 220, className: "w-full", style: { width: "100%", height: 220, touchAction: "none" } as any }}
               />
             ) : (
-              <div style={{ width: "100%", height: 200 }} />
+              <div style={{ height: 220 }} />
             )}
           </div>
 
-          <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
-              style={{ flex: 1, borderRadius: 12, padding: "10px 12px", fontWeight: 900, cursor: "pointer", border: "1px solid rgba(0,0,0,.12)", background: "#fff" }}
+              style={{ flex: 1, minWidth: 160, borderRadius: 12, padding: "10px 12px", border: "1px solid rgba(0,0,0,.12)", background: "#fff", fontWeight: 900, cursor: "pointer" }}
               onClick={() => sigRef.current?.clear()}
             >
               Limpiar firma
             </button>
+
             <button
-              style={{ flex: 1, borderRadius: 12, padding: "10px 12px", fontWeight: 950, cursor: "pointer", border: "none", background: "#0b1220", color: "#fff", opacity: closing ? 0.7 : 1 }}
+              style={{ flex: 1, minWidth: 160, borderRadius: 12, padding: "10px 12px", border: "none", background: "#0b1220", color: "#fff", fontWeight: 950, cursor: "pointer", opacity: closing ? 0.7 : 1 }}
               disabled={closing}
               onClick={closeSession}
             >
-              {closing ? "Cerrando…" : "Firmar y cerrar"}
+              {closing ? "Cerrando..." : "Firmar y cerrar"}
             </button>
           </div>
 
-          {closeMsg && <p style={{ marginTop: 10, fontWeight: 900 }}>{closeMsg}</p>}
+          {closeMsg && <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.85 }}>{closeMsg}</div>}
         </div>
       )}
 
-      {session && session.status !== "open" && (
-        <div style={{ marginTop: 14, padding: 14, borderRadius: 12, border: "1px solid rgba(0,0,0,.12)", background: "#fff" }}>
-          <div style={{ fontWeight: 950 }}>✅ Esta charla ya está cerrada.</div>
+      {/* PDF si está cerrada */}
+      {session && !isOpen && (
+        <div style={{ border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: 12, display: "grid", gap: 10 }}>
+          <div style={{ fontWeight: 950 }}>PDF del registro</div>
 
-          <div style={{ marginTop: 12, padding: 14, borderRadius: 12, border: "1px solid rgba(0,0,0,.10)", background: "rgba(0,0,0,.02)" }}>
-            <h2 style={{ fontWeight: 950 }}>PDF del registro</h2>
+          <button
+            style={{ borderRadius: 12, padding: "10px 12px", border: "none", background: "#0b1220", color: "#fff", fontWeight: 950, cursor: "pointer", opacity: pdfLoading ? 0.7 : 1 }}
+            disabled={pdfLoading}
+            onClick={generatePdf}
+          >
+            {pdfLoading ? "Generando..." : "Generar PDF"}
+          </button>
 
-            <button
-              style={{ marginTop: 10, width: "100%", borderRadius: 12, padding: "10px 12px", fontWeight: 950, cursor: "pointer", border: "none", background: "#0b1220", color: "#fff", opacity: pdfLoading ? 0.7 : 1 }}
-              disabled={pdfLoading}
-              onClick={generatePdf}
-            >
-              {pdfLoading ? "Generando…" : "Generar PDF"}
-            </button>
+          {pdfMsg && <div style={{ fontSize: 13, fontWeight: 900, opacity: 0.85 }}>{pdfMsg}</div>}
 
-            {pdfMsg && <p style={{ marginTop: 10, fontWeight: 900 }}>{pdfMsg}</p>}
-
-            {pdfUrl && (
-              <a style={{ display: "block", marginTop: 10, textDecoration: "underline", wordBreak: "break-all" }} href={pdfUrl} target="_blank" rel="noreferrer">
-                Descargar PDF
-              </a>
-            )}
-          </div>
+          {pdfUrl && (
+            <a style={{ fontSize: 13, textDecoration: "underline", wordBreak: "break-all" }} href={pdfUrl} target="_blank" rel="noreferrer">
+              Descargar PDF
+            </a>
+          )}
         </div>
       )}
     </div>

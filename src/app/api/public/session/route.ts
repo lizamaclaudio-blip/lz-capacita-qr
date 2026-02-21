@@ -16,12 +16,15 @@ export async function GET(req: NextRequest) {
       .select(
         "id, code, topic, location, session_date, trainer_name, status, closed_at, companies(name,address)"
       )
-      .eq("code", code)
+      .ilike("code", code) // ✅ case-insensitive exact match
       .single();
 
     if (error || !session) return NextResponse.json({ error: "Charla no existe" }, { status: 404 });
 
-    // No exponemos nada sensible, solo info para mostrar el header
+    const company = Array.isArray((session as any).companies)
+      ? (session as any).companies[0]
+      : (session as any).companies;
+
     return NextResponse.json({
       session: {
         id: session.id,
@@ -32,9 +35,7 @@ export async function GET(req: NextRequest) {
         trainer_name: session.trainer_name,
         status: session.status,
         closed_at: session.closed_at,
-        company: Array.isArray((session as any).companies)
-          ? (session as any).companies[0]
-          : (session as any).companies,
+        company,
       },
     });
   } catch (e: any) {
