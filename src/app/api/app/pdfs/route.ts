@@ -42,7 +42,12 @@ export async function GET(req: NextRequest) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-    return NextResponse.json({ pdfs: data ?? [] });
+    const rows = (data ?? []).map((r: any) => ({
+      ...r,
+      companies: Array.isArray(r.companies) ? r.companies[0] : r.companies,
+    }));
+
+    return NextResponse.json({ pdfs: rows });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }

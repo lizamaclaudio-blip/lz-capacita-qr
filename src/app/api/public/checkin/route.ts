@@ -5,18 +5,15 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { supabaseServer } from "@/lib/supabase/server";
+import { cleanRut, isValidRut } from "@/lib/rut";
 
 const BodySchema = z.object({
   code: z.string().min(3),
   full_name: z.string().min(3),
-  rut: z.string().min(3),
+  rut: z.string().min(6),
   role: z.string().optional().nullable(),
   signature_data_url: z.string().min(50),
 });
-
-function normalizeRut(rut: string) {
-  return String(rut ?? "").replace(/[^0-9kK]/g, "").toUpperCase();
-}
 
 export async function POST(req: Request) {
   try {
@@ -26,8 +23,12 @@ export async function POST(req: Request) {
 
     const code = parsed.data.code.trim().toUpperCase();
     const full_name = parsed.data.full_name.trim();
-    const rut = normalizeRut(parsed.data.rut);
+    const rutClean = cleanRut(parsed.data.rut);
     const role = parsed.data.role ? String(parsed.data.role).trim() : null;
+
+    if (!isValidRut(rutClean)) {
+      return NextResponse.json({ error: "RUT inválido" }, { status: 400 });
+    }
 
     const sb = supabaseServer();
 
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
       .from("attendees")
       .select("id")
       .eq("session_id", session.id)
-      .eq("rut", rut)
+      .eq("rut", rutClean)
       .maybeSingle();
 
     if (existing?.id) {
@@ -68,7 +69,7 @@ export async function POST(req: Request) {
     }
 
     const buffer = Buffer.from(b64, "base64");
-    const filePath = `attendee-signatures/${session.code}/${Date.now()}-${nanoid(6)}.png`;
+    const filePath = `attendee-signatures/${session.code}/${rutClean}-${Date.now()}-${nanoid(6)}.png`;
 
     const up = await sb.storage.from("assets").upload(filePath, buffer, {
       contentType: "image/png",
@@ -82,7 +83,7 @@ export async function POST(req: Request) {
       .insert({
         session_id: session.id,
         full_name,
-        rut,
+        rut: rutClean,
         role,
         signature_path: filePath,
       })

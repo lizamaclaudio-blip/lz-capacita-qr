@@ -480,9 +480,26 @@ export async function POST(req: NextRequest) {
 
     if (up.error) return NextResponse.json({ error: up.error.message }, { status: 500 });
 
+    // ✅ Guardar en sessions para que aparezca en /app/pdfs
+    const nowIso = new Date().toISOString();
+    const { error: updErr } = await sb
+      .from("sessions")
+      .update({ pdf_path: pdfPath, pdf_generated_at: nowIso })
+      .eq("id", (session as any).id);
+
     const { data: signed, error: signErr } = await sb.storage.from("assets").createSignedUrl(pdfPath, 60 * 60);
     if (signErr || !signed) {
       return NextResponse.json({ error: signErr?.message || "No se pudo firmar URL" }, { status: 500 });
+    }
+
+    if (updErr) {
+      return NextResponse.json({
+        ok: true,
+        pdf_path: pdfPath,
+        signed_url: signed.signedUrl,
+        warning: "PDF OK, pero no pude guardar pdf_path/pdf_generated_at en sessions (revisa columnas/RLS).",
+        error: updErr.message,
+      });
     }
 
     return NextResponse.json({ ok: true, pdf_path: pdfPath, signed_url: signed.signedUrl });

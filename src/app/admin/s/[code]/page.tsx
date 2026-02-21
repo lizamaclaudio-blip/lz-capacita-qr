@@ -1,53 +1,8 @@
+"use client";
+
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
-import SignatureCanvas from "react-signature-canvas";
-
-function trimCanvasToDataURL(canvas: HTMLCanvasElement, padding = 12) {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return canvas.toDataURL("image/png");
-
-  const w = canvas.width;
-  const h = canvas.height;
-  const img = ctx.getImageData(0, 0, w, h);
-  const data = img.data;
-
-  let minX = w, minY = h, maxX = -1, maxY = -1;
-
-  // detecta pixeles con alpha > 0
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      const a = data[(y * w + x) * 4 + 3];
-      if (a > 0) {
-        if (x < minX) minX = x;
-        if (y < minY) minY = y;
-        if (x > maxX) maxX = x;
-        if (y > maxY) maxY = y;
-      }
-    }
-  }
-
-  // si no hay nada dibujado
-  if (maxX === -1) return canvas.toDataURL("image/png");
-
-  // padding
-  minX = Math.max(minX - padding, 0);
-  minY = Math.max(minY - padding, 0);
-  maxX = Math.min(maxX + padding, w - 1);
-  maxY = Math.min(maxY + padding, h - 1);
-
-  const outW = maxX - minX + 1;
-  const outH = maxY - minY + 1;
-
-  const out = document.createElement("canvas");
-  out.width = outW;
-  out.height = outH;
-
-  const octx = out.getContext("2d");
-  if (!octx) return canvas.toDataURL("image/png");
-
-  octx.drawImage(canvas, minX, minY, outW, outH, 0, 0, outW, outH);
-  return out.toDataURL("image/png");
-}
+import { useEffect, useState, useRef } from "react";
+import { SignaturePad, type SignaturePadRef } from "@/components/SignaturePad";
 
 export default function AdminSession() {
   const params = useParams<{ code: string }>();
@@ -58,8 +13,7 @@ export default function AdminSession() {
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  const sigRef = useRef<SignatureCanvas | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const sigRef = useRef<SignaturePadRef | null>(null);
 
   const [closing, setClosing] = useState(false);
   const [closeMsg, setCloseMsg] = useState<string | null>(null);
@@ -68,8 +22,6 @@ export default function AdminSession() {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfMsg, setPdfMsg] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
-
-  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     setPdfUrl(null);
@@ -115,18 +67,15 @@ export default function AdminSession() {
     setCloseMsg(null);
     setErr(null);
 
-    const sig = sigRef.current;
-
     if (!passcode) return setCloseMsg("Falta passcode");
-    if (!sig || sig.isEmpty()) return setCloseMsg("Falta firma del relator 👇");
+    if (!sigRef.current || sigRef.current.isEmpty()) return setCloseMsg("Falta firma del relator 👇");
+
+    const trainer_signature_data_url = sigRef.current.toPngDataUrl();
+    if (!trainer_signature_data_url) return setCloseMsg("No se pudo capturar la firma. Intenta de nuevo.");
 
     setClosing(true);
 
     try {
-      // ✅ NO usar getTrimmedCanvas(); lo recortamos nosotros
-      const canvas = sig.getCanvas();
-      const trainer_signature_data_url = trimCanvasToDataURL(canvas, 14);
-
       const res = await fetch("/api/admin/close-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -141,7 +90,7 @@ export default function AdminSession() {
       }
 
       setCloseMsg("✅ Charla cerrada con firma del relator.");
-      sig.clear();
+      sigRef.current?.clear();
       await load();
     } catch (e: any) {
       setCloseMsg(e?.message || "Error cerrando charla");
@@ -175,7 +124,6 @@ export default function AdminSession() {
       setPdfMsg("✅ PDF generado.");
       setPdfUrl(json?.signed_url || null);
 
-      // opcional: abrir automáticamente
       if (json?.signed_url) window.open(json.signed_url, "_blank", "noopener,noreferrer");
     } catch (e: any) {
       setPdfMsg(e?.message || "Error generando PDF");
@@ -204,7 +152,15 @@ export default function AdminSession() {
           onChange={(e) => setPasscode(e.target.value)}
         />
         <button
-          style={{ borderRadius: 12, padding: "10px 14px", border: "none", background: "#0b1220", color: "#fff", fontWeight: 900, cursor: "pointer" }}
+          style={{
+            borderRadius: 12,
+            padding: "10px 14px",
+            border: "none",
+            background: "#0b1220",
+            color: "#fff",
+            fontWeight: 900,
+            cursor: "pointer",
+          }}
           onClick={load}
         >
           Cargar
@@ -212,20 +168,53 @@ export default function AdminSession() {
       </div>
 
       {err && (
-        <div style={{ padding: "10px 12px", borderRadius: 12, background: "#fff1f1", border: "1px solid #ffd0d0", color: "#9b1c1c", fontWeight: 850 }}>
+        <div
+          style={{
+            padding: "10px 12px",
+            borderRadius: 12,
+            background: "#fff1f1",
+            border: "1px solid #ffd0d0",
+            color: "#9b1c1c",
+            fontWeight: 850,
+          }}
+        >
           {err}
         </div>
       )}
 
       {session && (
-        <div style={{ border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: 12, fontSize: 13, display: "grid", gap: 4 }}>
-          <div><b>Empresa:</b> {session.companies?.name}</div>
-          <div><b>Dirección:</b> {session.companies?.address || "-"}</div>
-          <div><b>Charla:</b> {session.topic}</div>
-          <div><b>Lugar:</b> {session.location || "-"}</div>
-          <div><b>Relator:</b> {session.trainer_name}</div>
-          <div><b>Estado:</b> {status}{session.closed_at ? ` (cerrada: ${new Date(session.closed_at).toLocaleString("es-CL")})` : ""}</div>
-          <div><b>Total asistentes:</b> {attendees.length}</div>
+        <div
+          style={{
+            border: "1px solid rgba(0,0,0,.10)",
+            borderRadius: 14,
+            padding: 12,
+            fontSize: 13,
+            display: "grid",
+            gap: 4,
+          }}
+        >
+          <div>
+            <b>Empresa:</b> {session.companies?.name}
+          </div>
+          <div>
+            <b>Dirección:</b> {session.companies?.address || "-"}
+          </div>
+          <div>
+            <b>Charla:</b> {session.topic}
+          </div>
+          <div>
+            <b>Lugar:</b> {session.location || "-"}
+          </div>
+          <div>
+            <b>Relator:</b> {session.trainer_name}
+          </div>
+          <div>
+            <b>Estado:</b> {status}
+            {session.closed_at ? ` (cerrada: ${new Date(session.closed_at).toLocaleString("es-CL")})` : ""}
+          </div>
+          <div>
+            <b>Total asistentes:</b> {attendees.length}
+          </div>
         </div>
       )}
 
@@ -259,32 +248,52 @@ export default function AdminSession() {
         </table>
       </div>
 
-      {/* Cerrar charla */}
       {session && isOpen && (
-        <div style={{ border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: 12, display: "grid", gap: 10 }}>
+        <div
+          style={{
+            border: "1px solid rgba(0,0,0,.10)",
+            borderRadius: 14,
+            padding: 12,
+            display: "grid",
+            gap: 10,
+          }}
+        >
           <div style={{ fontWeight: 950 }}>Cerrar charla (firma relator)</div>
 
           <div style={{ border: "1px solid rgba(0,0,0,.12)", borderRadius: 14, overflow: "hidden", background: "#fff" }}>
-            {mounted ? (
-              <SignatureCanvas
-                ref={sigRef}
-                canvasProps={{ width: 900, height: 220, className: "w-full", style: { width: "100%", height: 220, touchAction: "none" } as any }}
-              />
-            ) : (
-              <div style={{ height: 220 }} />
-            )}
+            <SignaturePad ref={sigRef} height={220} />
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
-              style={{ flex: 1, minWidth: 160, borderRadius: 12, padding: "10px 12px", border: "1px solid rgba(0,0,0,.12)", background: "#fff", fontWeight: 900, cursor: "pointer" }}
+              style={{
+                flex: 1,
+                minWidth: 160,
+                borderRadius: 12,
+                padding: "10px 12px",
+                border: "1px solid rgba(0,0,0,.12)",
+                background: "#fff",
+                fontWeight: 900,
+                cursor: "pointer",
+              }}
               onClick={() => sigRef.current?.clear()}
             >
               Limpiar firma
             </button>
 
             <button
-              style={{ flex: 1, minWidth: 160, borderRadius: 12, padding: "10px 12px", border: "none", background: "#0b1220", color: "#fff", fontWeight: 950, cursor: "pointer", opacity: closing ? 0.7 : 1 }}
+              style={{
+                flex: 1,
+                minWidth: 160,
+                borderRadius: 12,
+                padding: "10px 12px",
+                border: "none",
+                background: "#0b1220",
+                color: "#fff",
+                fontWeight: 950,
+                cursor: "pointer",
+                opacity: closing ? 0.7 : 1,
+              }}
               disabled={closing}
               onClick={closeSession}
             >
@@ -296,13 +305,29 @@ export default function AdminSession() {
         </div>
       )}
 
-      {/* PDF si está cerrada */}
       {session && !isOpen && (
-        <div style={{ border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: 12, display: "grid", gap: 10 }}>
+        <div
+          style={{
+            border: "1px solid rgba(0,0,0,.10)",
+            borderRadius: 14,
+            padding: 12,
+            display: "grid",
+            gap: 10,
+          }}
+        >
           <div style={{ fontWeight: 950 }}>PDF del registro</div>
 
           <button
-            style={{ borderRadius: 12, padding: "10px 12px", border: "none", background: "#0b1220", color: "#fff", fontWeight: 950, cursor: "pointer", opacity: pdfLoading ? 0.7 : 1 }}
+            style={{
+              borderRadius: 12,
+              padding: "10px 12px",
+              border: "none",
+              background: "#0b1220",
+              color: "#fff",
+              fontWeight: 950,
+              cursor: "pointer",
+              opacity: pdfLoading ? 0.7 : 1,
+            }}
             disabled={pdfLoading}
             onClick={generatePdf}
           >

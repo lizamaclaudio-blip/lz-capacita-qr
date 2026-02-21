@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import SignatureCanvas from "react-signature-canvas";
 import styles from "./page.module.css";
+import { SignaturePad, type SignaturePadRef } from "@/components/SignaturePad";
 
 type SessionInfo = {
   id: string;
@@ -42,10 +42,7 @@ export default function PublicCheckinPage() {
   const [sending, setSending] = useState(false);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
-  const sigRef = useRef<SignatureCanvas | null>(null);
-
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const sigRef = useRef<SignaturePadRef | null>(null);
 
   const isClosed = useMemo(() => {
     const st = (session?.status ?? "").toLowerCase();
@@ -86,15 +83,13 @@ export default function PublicCheckinPage() {
     if (!fullName.trim()) return setError("Ingresa tu nombre.");
     if (!rut.trim()) return setError("Ingresa tu RUT.");
     if (isClosed) return setError("Esta charla está cerrada.");
-    if (!sigRef.current || sigRef.current.isEmpty()) return setError("Falta tu firma 👇");
 
-    // ✅ NO usar getTrimmedCanvas()
-    let signature_data_url = "";
-    try {
-      signature_data_url = (sigRef.current as any).toDataURL("image/png");
-    } catch {
-      signature_data_url = (sigRef.current as any).toDataURL();
+    if (!sigRef.current || sigRef.current.isEmpty()) {
+      return setError("Falta tu firma 👇");
     }
+
+    const signature_data_url = sigRef.current.toPngDataUrl();
+    if (!signature_data_url) return setError("No se pudo capturar la firma. Intenta de nuevo.");
 
     setSending(true);
     try {
@@ -209,18 +204,7 @@ export default function PublicCheckinPage() {
             <label className={styles.label}>Firma *</label>
 
             <div className={styles.sigWrap}>
-              {mounted ? (
-                <SignatureCanvas
-                  ref={sigRef}
-                  canvasProps={{
-                    width: 900,
-                    height: 220,
-                    className: styles.sigCanvas,
-                  }}
-                />
-              ) : (
-                <div className={styles.sigPlaceholder} />
-              )}
+              <SignaturePad ref={sigRef} height={220} />
             </div>
 
             <div className={styles.sigActions}>
