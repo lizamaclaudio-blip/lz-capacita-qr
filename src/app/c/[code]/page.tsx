@@ -43,9 +43,11 @@ export default function PublicCheckinPage() {
   const [sending, setSending] = useState(false);
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
+  // ✅ ref correcto (NO callback que retorne algo)
   const sigRef = useRef<SignatureCanvas | null>(null);
-  const [mounted, setMounted] = useState(false);
 
+  // Evita problemas de SSR/hidratación con canvas
+  const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   const isClosed = useMemo(() => {
@@ -62,6 +64,7 @@ export default function PublicCheckinPage() {
     });
 
     const json = await res.json().catch(() => null);
+
     if (!res.ok) {
       setSession(null);
       setLoading(false);
@@ -85,8 +88,8 @@ export default function PublicCheckinPage() {
 
     if (!fullName.trim()) return setError("Ingresa tu nombre.");
     if (!rut.trim()) return setError("Ingresa tu RUT.");
-    if (!sigRef.current || sigRef.current.isEmpty()) return setError("Falta tu firma 👇");
     if (isClosed) return setError("Esta charla está cerrada.");
+    if (!sigRef.current || sigRef.current.isEmpty()) return setError("Falta tu firma 👇");
 
     const signature_data_url = sigRef.current.getTrimmedCanvas().toDataURL("image/png");
 
@@ -201,10 +204,11 @@ export default function PublicCheckinPage() {
 
           <div className={styles.field}>
             <label className={styles.label}>Firma *</label>
+
             <div className={styles.sigWrap}>
               {mounted ? (
                 <SignatureCanvas
-                  ref={sigRef}
+                  ref={sigRef}  // ✅ esto compila bien
                   canvasProps={{
                     width: 900,
                     height: 220,
