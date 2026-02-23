@@ -31,7 +31,6 @@ async function requireUser(req: NextRequest) {
   return { ok: true as const, token, supabase, user: u.user };
 }
 
-// ✅ Fallback universal: /api/app/companies/<id>/sessions
 function companyIdFromReq(req: NextRequest) {
   const parts = req.nextUrl.pathname.split("/").filter(Boolean);
   const idx = parts.indexOf("companies");
@@ -52,6 +51,18 @@ function genCode(len = 6) {
   return out;
 }
 
+async function requireOwnedCompany(auth: { supabase: any; user: any }, companyId: string) {
+  const { data, error } = await auth.supabase
+    .from("companies")
+    .select("id, owner_id")
+    .eq("id", companyId)
+    .eq("owner_id", auth.user.id)
+    .single();
+
+  if (error || !data) return null;
+  return data;
+}
+
 export async function GET(req: NextRequest, ctx?: any) {
   try {
     const companyId = resolveCompanyId(req, ctx);
@@ -60,10 +71,14 @@ export async function GET(req: NextRequest, ctx?: any) {
     const auth = await requireUser(req);
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
+    const owned = await requireOwnedCompany(auth, companyId);
+    if (!owned) return NextResponse.json({ error: "Empresa no encontrada o sin acceso" }, { status: 404 });
+
     const { data, error } = await auth.supabase
       .from("sessions")
       .select("*")
       .eq("company_id", companyId)
+      .eq("owner_id", auth.user.id)
       .order("created_at", { ascending: false });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
@@ -81,29 +96,29 @@ export async function POST(req: NextRequest, ctx?: any) {
     const auth = await requireUser(req);
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
+    const owned = await requireOwnedCompany(auth, companyId);
+    if (!owned) return NextResponse.json({ error: "Empresa no encontrada o sin acceso" }, { status: 404 });
+
     const body = await req.json().catch(() => ({}));
 
     const topic = typeof body.topic === "string" ? body.topic.trim() : "";
     const trainer_name = typeof body.trainer_name === "string" ? body.trainer_name.trim() : "";
-    const trainer_rut_raw = typeof body.trainer_rut === "string" ? body.trainer_rut.trim() : "";
 
     if (!topic || !trainer_name) {
       return NextResponse.json({ error: "topic y trainer_name son obligatorios" }, { status: 400 });
     }
 
-    if (!trainer_rut_raw) {
-      return NextResponse.json({ error: "trainer_rut es obligatorio (RUT del relator)" }, { status: 400 });
-    }
-
-    const trainer_rut = cleanRut(trainer_rut_raw);
-    if (!isValidRut(trainer_rut)) {
-      return NextResponse.json({ error: "RUT del relator inválido" }, { status: 400 });
-    }
-
     const location = typeof body.location === "string" ? body.location.trim() : null;
     const session_date = typeof body.session_date === "string" ? body.session_date : null;
 
-    // code único (simple)
+    const trainer_rut_raw = typeof body.trainer_rut === "string" ? body.trainer_rut.trim() : "";
+    let admin_passcode: string | null = null;
+    if (trainer_rut_raw) {
+      const r = cleanRut(trainer_rut_raw);
+      if (!isValidRut(r)) return NextResponse.json({ error: "RUT relator inválido" }, { status: 400 });
+      admin_passcode = r;
+    }
+
     let code = genCode(6);
     for (let i = 0; i < 3; i++) {
       const { count } = await auth.supabase
@@ -117,6 +132,7 @@ export async function POST(req: NextRequest, ctx?: any) {
     const { data, error } = await auth.supabase
       .from("sessions")
       .insert({
+        owner_id: auth.user.id,
         company_id: companyId,
         code,
         topic,
@@ -124,7 +140,7 @@ export async function POST(req: NextRequest, ctx?: any) {
         session_date,
         trainer_name,
         status: "open",
-        admin_passcode: trainer_rut, // ✅ clave admin por charla
+        ...(admin_passcode ? { admin_passcode } : {}),
       })
       .select("*")
       .single();

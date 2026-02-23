@@ -34,12 +34,12 @@ export async function GET(req: NextRequest) {
     const auth = await requireUser(req);
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-    // 1) Traer sesiones (incluye empresa)
     const { data: sessions, error: sErr } = await auth.supabase
       .from("sessions")
       .select(
-        "id, company_id, code, topic, location, session_date, trainer_name, status, closed_at, created_at, pdf_path, pdf_generated_at, companies(id,name,address)"
+        "id, owner_id, company_id, code, topic, location, session_date, trainer_name, status, closed_at, created_at, pdf_path, pdf_generated_at, companies(id,name,address)"
       )
+      .eq("owner_id", auth.user.id)
       .order("created_at", { ascending: false });
 
     if (sErr) return NextResponse.json({ error: sErr.message }, { status: 400 });
@@ -47,7 +47,6 @@ export async function GET(req: NextRequest) {
     const list = sessions ?? [];
     const ids = list.map((s: any) => s.id).filter(Boolean);
 
-    // 2) Contar asistentes por sesión (simple y efectivo para v1)
     const counts: Record<string, number> = {};
     if (ids.length) {
       const { data: atts, error: aErr } = await auth.supabase
@@ -67,6 +66,7 @@ export async function GET(req: NextRequest) {
     const out = list.map((s: any) => ({
       ...s,
       attendees_count: counts[s.id] ?? 0,
+      companies: Array.isArray(s.companies) ? s.companies[0] : s.companies,
     }));
 
     return NextResponse.json({ sessions: out });

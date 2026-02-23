@@ -20,13 +20,18 @@ function sbAuthed(token: string) {
 
 async function requireUser(req: NextRequest) {
   const token = getToken(req);
-  if (!token) return { ok: false as const, status: 401, error: "Missing bearer token" };
+  if (!token) {
+    return { ok: false as const, status: 401, error: "Missing bearer token" };
+  }
 
   const supabase = sbAuthed(token);
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) return { ok: false as const, status: 401, error: "Unauthorized" };
+  const { data: u, error: uerr } = await supabase.auth.getUser();
 
-  return { ok: true as const, token, supabase, user: data.user };
+  if (uerr || !u?.user) {
+    return { ok: false as const, status: 401, error: "Unauthorized" };
+  }
+
+  return { ok: true as const, supabase, user: u.user };
 }
 
 export async function GET(req: NextRequest) {
@@ -34,15 +39,13 @@ export async function GET(req: NextRequest) {
     const auth = await requireUser(req);
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-    // ✅ RLS ya filtra, pero igual dejamos explícito
     const { data, error } = await auth.supabase
       .from("companies")
       .select("*")
-      .eq("user_id", auth.user.id)
+      .eq("owner_id", auth.user.id)
       .order("created_at", { ascending: false });
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
     return NextResponse.json({ companies: data ?? [] });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
@@ -56,21 +59,39 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => ({}));
 
-    const payload = {
-      user_id: auth.user.id, // ✅ dueño
-      name: String(body?.name ?? "").trim(),
-      address: body?.address ? String(body.address).trim() : null,
-      rut: body?.rut ? String(body.rut).trim() : null,
-      contact_name: body?.contact_name ? String(body.contact_name).trim() : null,
-      contact_rut: body?.contact_rut ? String(body.contact_rut).trim() : null,
-      contact_email: body?.contact_email ? String(body.contact_email).trim() : null,
-      contact_phone: body?.contact_phone ? String(body.contact_phone).trim() : null,
-      logo_path: body?.logo_path ? String(body.logo_path).trim() : null,
-    };
-
-    if (!payload.name) {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name) {
       return NextResponse.json({ error: "Nombre empresa es obligatorio" }, { status: 400 });
     }
+
+    const payload: any = {
+      owner_id: auth.user.id,
+      name,
+      address: typeof body.address === "string" && body.address.trim() ? body.address.trim() : null,
+      rut: typeof body.rut === "string" && body.rut.trim() ? body.rut.trim() : null,
+
+      contact_name:
+        typeof body.contact_name === "string" && body.contact_name.trim()
+          ? body.contact_name.trim()
+          : null,
+      contact_rut:
+        typeof body.contact_rut === "string" && body.contact_rut.trim()
+          ? body.contact_rut.trim()
+          : null,
+      contact_email:
+        typeof body.contact_email === "string" && body.contact_email.trim()
+          ? body.contact_email.trim()
+          : null,
+      contact_phone:
+        typeof body.contact_phone === "string" && body.contact_phone.trim()
+          ? body.contact_phone.trim()
+          : null,
+
+      logo_path:
+        typeof body.logo_path === "string" && body.logo_path.trim()
+          ? body.logo_path.replace(/^company-logos\//, "")
+          : null,
+    };
 
     const { data, error } = await auth.supabase
       .from("companies")
@@ -79,7 +100,6 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
     return NextResponse.json({ company: data });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
