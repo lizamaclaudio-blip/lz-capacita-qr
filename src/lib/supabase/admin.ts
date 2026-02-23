@@ -5,7 +5,7 @@ export function supabaseAdmin() {
   const service = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").replace(/\s/g, "");
 
   if (!url) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL");
-  if (!service) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY (required for owner console)");
+  if (!service) throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY");
 
   return createClient(url, service, {
     auth: {
