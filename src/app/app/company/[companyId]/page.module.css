@@ -5,8 +5,8 @@
 .headerRight{ display:flex; gap:10px; align-items:center; }
 
 .back{
-  border: 1px solid rgba(0,0,0,.12);
-  background: #fff;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.75);
   border-radius: 12px;
   padding: 10px 12px;
   font-weight: 900;
@@ -18,8 +18,8 @@
 .sub{ margin:0; font-size: 12px; opacity:.75; }
 
 .ghostBtn{
-  border: 1px solid rgba(0,0,0,.12);
-  background: rgba(255,255,255,0.92);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.75);
   border-radius: 12px;
   padding: 10px 12px;
   font-weight: 900;
@@ -39,19 +39,20 @@
 .notice{
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(29,191,115,.12);
-  border: 1px solid rgba(29,191,115,.25);
+  background: rgba(20, 184, 166, .14);
+  border: 1px solid rgba(20, 184, 166, .28);
   color: rgba(2,6,23,.85);
   font-size: 13px;
   font-weight: 900;
 }
 
 .card{
-  background: rgba(255,255,255,0.92);
-  border: 1px solid rgba(0,0,0,.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 18px;
   padding: 16px;
-  box-shadow: 0 12px 30px rgba(0,0,0,.06);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
 }
 
 .cardHeader{
@@ -85,8 +86,8 @@
   background: #fff;
 }
 .input:focus{
-  border-color: rgba(29,191,115,.7);
-  box-shadow: 0 0 0 3px rgba(29,191,115,.18);
+  border-color: rgba(79, 70, 229, .55);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, .16);
 }
 
 .createBtn{
@@ -96,18 +97,21 @@
   padding: 12px 14px;
   font-weight: 950;
   cursor: pointer;
-  background: linear-gradient(180deg, #34d399, #10b981);
-  color: #0b1b11;
+  background: var(--btn-primary);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
 }
+.createBtn:hover{ filter: brightness(1.02); transform: translateY(-1px); }
 .createBtn:disabled{ opacity:.6; cursor:not-allowed; }
 
 /* Quick card */
 .quickCard{
-  background: rgba(255,255,255,0.92);
-  border: 1px solid rgba(29,191,115,.25);
+  background: var(--surface);
+  border: 1px solid rgba(79, 70, 229, .20);
   border-radius: 18px;
   padding: 16px;
-  box-shadow: 0 12px 30px rgba(0,0,0,.06);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
 }
 
 .quickTop{
@@ -140,13 +144,15 @@
   padding: 10px 12px;
   font-weight: 950;
   cursor: pointer;
-  background: #1dbf73;
-  color: #0b1b11;
+  background: var(--btn-accent);
+  color: #0b1220;
+  box-shadow: var(--shadow-sm);
 }
+.primaryBtn:hover{ filter: brightness(1.02); transform: translateY(-1px); }
 
 .secondaryBtn{
-  border: 1px solid rgba(0,0,0,.12);
-  background: #fff;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.75);
   border-radius: 12px;
   padding: 10px 12px;
   font-weight: 900;
@@ -155,7 +161,7 @@
 
 .darkBtn{
   border: none;
-  background: #0b1220;
+  background: var(--btn-dark);
   color: #fff;
   border-radius: 12px;
   padding: 10px 12px;
@@ -164,8 +170,8 @@
 }
 
 .copyBtn{
-  border: 1px solid rgba(0,0,0,.12);
-  background: rgba(255,255,255,0.92);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.75);
   border-radius: 999px;
   padding: 8px 12px;
   font-weight: 950;
@@ -216,8 +222,8 @@
   background: #fff;
 }
 .search:focus{
-  border-color: rgba(29,191,115,.7);
-  box-shadow: 0 0 0 3px rgba(29,191,115,.18);
+  border-color: rgba(79, 70, 229, .55);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, .16);
 }
 
 .empty{ font-size: 13px; opacity:.75; padding: 6px 0; }
@@ -233,14 +239,15 @@
 }
 
 .sessionCard{
-  background: rgba(255,255,255,0.92);
-  border: 1px solid rgba(0,0,0,.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 18px;
   padding: 14px;
-  box-shadow: 0 12px 30px rgba(0,0,0,.05);
+  box-shadow: var(--shadow-sm);
   display:flex;
   flex-direction: column;
   gap: 10px;
+  backdrop-filter: blur(10px);
 }
 
 .sessionTop{
@@ -268,8 +275,8 @@
 }
 
 .badgeClosed{
-  background: rgba(29,191,115,.12);
-  border-color: rgba(29,191,115,.25);
+  background: rgba(20, 184, 166, .14);
+  border-color: rgba(20, 184, 166, .28);
 }
 
 .metaBlock{

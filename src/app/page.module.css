@@ -1,8 +1,9 @@
 .bg{
   min-height: 100vh;
   background:
-    radial-gradient(900px 520px at 25% 0%, rgba(29,191,115,0.10), transparent 60%),
-    linear-gradient(180deg, #f6fafc 0%, #eef4f7 100%);
+    radial-gradient(980px 520px at 20% 0%, rgba(79, 70, 229, 0.14), transparent 62%),
+    radial-gradient(880px 520px at 100% 10%, rgba(20, 184, 166, 0.12), transparent 58%),
+    linear-gradient(180deg, #f7f9ff 0%, #eef4ff 100%);
   display:flex;
   align-items:center;
   justify-content:center;
@@ -14,11 +15,12 @@
 }
 
 .card{
-  background: rgba(255,255,255,0.92);
-  border: 1px solid rgba(0,0,0,.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 20px;
-  box-shadow: 0 18px 60px rgba(0,0,0,.10);
+  box-shadow: var(--shadow-md);
   padding: 16px;
+  backdrop-filter: blur(10px);
 }
 
 .hero{
@@ -111,17 +113,19 @@
 
 .primaryBtn{
   border: none;
-  background: #1dbf73;
-  color: #0b1b11;
+  background: var(--btn-accent);
+  color: #0b1220;
   border-radius: 12px;
   padding: 10px 14px;
   font-weight: 950;
   text-decoration:none;
+  box-shadow: var(--shadow-sm);
 }
+.primaryBtn:hover{ filter: brightness(1.02); transform: translateY(-1px); }
 
 .secondaryBtn{
-  border: 1px solid rgba(0,0,0,.12);
-  background: #fff;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.75);
   border-radius: 12px;
   padding: 10px 14px;
   font-weight: 950;
@@ -142,11 +146,11 @@
 
 .mock{
   border-radius: 18px;
-  border: 1px solid rgba(0,0,0,.10);
+  border: 1px solid var(--border);
   background:
-    radial-gradient(600px 320px at 30% 0%, rgba(29,191,115,0.10), transparent 60%),
-    linear-gradient(180deg, rgba(11,34,48,.06), rgba(255,255,255,.85));
-  box-shadow: 0 14px 40px rgba(0,0,0,.08);
+    radial-gradient(680px 360px at 30% 0%, rgba(79, 70, 229, 0.12), transparent 62%),
+    linear-gradient(180deg, rgba(15, 23, 42, .05), rgba(255,255,255,.85));
+  box-shadow: var(--shadow-sm);
   padding: 14px;
 }
 
@@ -165,8 +169,8 @@
   font-weight: 950;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(29,191,115,.25);
-  background: rgba(29,191,115,.12);
+  border: 1px solid rgba(20, 184, 166, .28);
+  background: rgba(20, 184, 166, .14);
 }
 
 .mockGrid{
@@ -215,14 +219,14 @@
 
 .mockBtnDark{
   border: none;
-  background: #0b1220;
+  background: var(--btn-dark);
   color: #fff;
 }
 
 .mockBtnGreen{
   border: none;
-  background: #1dbf73;
-  color: #0b1b11;
+  background: var(--btn-primary);
+  color: #fff;
 }
 
 .footer{

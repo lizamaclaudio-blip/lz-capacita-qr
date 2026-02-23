@@ -9,8 +9,8 @@
 
   background:
     radial-gradient(700px 360px at 30% 0%, rgba(255,255,255,0.10), transparent 60%),
-    linear-gradient(180deg, #0b2230 0%, #071821 55%, #06131a 100%);
-  box-shadow: 0 18px 50px rgba(0,0,0,.25);
+    linear-gradient(180deg, #0b1220 0%, #08162b 45%, #060b16 100%);
+  box-shadow: var(--shadow-md);
   border: 1px solid rgba(255,255,255,.08);
 }
 
@@ -88,8 +88,8 @@
 }
 
 .active{
-  background: rgba(29,191,115,.14);
-  border-color: rgba(29,191,115,.30);
+  background: rgba(79, 70, 229, .18);
+  border-color: rgba(79, 70, 229, .35);
 }
 
 .iconWrap{

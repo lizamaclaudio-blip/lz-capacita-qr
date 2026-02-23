@@ -11,8 +11,8 @@
 .sub{ margin-top:4px; font-size:12px; opacity:.75; }
 
 .refreshBtn{
-  border: 1px solid rgba(0,0,0,.12);
-  background: rgba(255,255,255,0.92);
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.75);
   border-radius: 12px;
   padding: 10px 12px;
   font-weight: 900;
@@ -52,9 +52,10 @@
   gap: 12px;
   padding: 14px;
   border-radius: 18px;
-  border: 1px solid rgba(0,0,0,.08);
-  background: rgba(255,255,255,0.92);
-  box-shadow: 0 12px 30px rgba(0,0,0,.06);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
 }
 
 .kpi{
@@ -63,7 +64,7 @@
 }
 .kpi:hover{
   transform: translateY(-1px);
-  box-shadow: 0 16px 34px rgba(0,0,0,.08);
+  box-shadow: 0 18px 40px rgba(0,0,0,.10);
 }
 
 .kpiDisabled{ opacity: .88; }
@@ -91,8 +92,8 @@
   display:grid;
   place-items:center;
   font-weight: 950;
-  background: rgba(29,191,115,.14);
-  border: 1px solid rgba(29,191,115,.24);
+  background: rgba(20, 184, 166, .14);
+  border: 1px solid rgba(20, 184, 166, .28);
   color: rgba(2,6,23,.85);
 }
 
@@ -110,11 +111,12 @@
 
 /* Actions card */
 .card{
-  background: rgba(255,255,255,0.92);
-  border: 1px solid rgba(0,0,0,.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 18px;
   padding: 16px;
-  box-shadow: 0 12px 30px rgba(0,0,0,.06);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
 }
 
 .cardTitle{ font-weight: 950; font-size: 16px; }
@@ -135,15 +137,15 @@
 }
 
 .actionBtn{
-  border: 1px solid rgba(0,0,0,.12);
-  background: #fff;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.75);
   border-radius: 14px;
   padding: 12px 14px;
   font-weight: 950;
   cursor: pointer;
   text-align:left;
 }
-.actionBtn:hover{ background: rgba(2,6,23,.02); }
+.actionBtn:hover{ background: rgba(79, 70, 229, .05); }
 
 .footer{
   text-align:center;

@@ -5,17 +5,19 @@
   justify-content:center;
   padding: 16px;
   background:
-    radial-gradient(900px 480px at 25% 0%, rgba(29,191,115,0.10), transparent 60%),
-    linear-gradient(180deg, #f6fafc 0%, #eef4f7 100%);
+    radial-gradient(980px 520px at 20% 0%, rgba(79, 70, 229, 0.14), transparent 62%),
+    radial-gradient(880px 520px at 100% 10%, rgba(20, 184, 166, 0.12), transparent 58%),
+    linear-gradient(180deg, #f7f9ff 0%, #eef4ff 100%);
 }
 
 .card{
   width: min(560px, 100%);
-  background: rgba(255,255,255,0.95);
-  border: 1px solid rgba(0,0,0,.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 18px;
-  box-shadow: 0 16px 50px rgba(0,0,0,.10);
+  box-shadow: var(--shadow-md);
   padding: 14px;
+  backdrop-filter: blur(10px);
 }
 
 .brandRow{
@@ -57,8 +59,8 @@
   margin-top: 10px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(29,191,115,.12);
-  border: 1px solid rgba(29,191,115,.25);
+  background: rgba(20, 184, 166, .14);
+  border: 1px solid rgba(20, 184, 166, .28);
   font-size: 13px;
   font-weight: 950;
 }
@@ -108,8 +110,8 @@
   font-size: 15px;
 }
 .input:focus{
-  border-color: rgba(29,191,115,.7);
-  box-shadow: 0 0 0 3px rgba(29,191,115,.18);
+  border-color: rgba(79, 70, 229, .55);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, .16);
 }
 
 .sigWrap{
@@ -136,8 +138,8 @@
 
 .secondaryBtn{
   flex:1;
-  border:1px solid rgba(0,0,0,.12);
-  background:#fff;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,0.75);
   border-radius: 12px;
   padding: 10px 12px;
   font-weight: 950;
@@ -147,13 +149,15 @@
 .primaryBtn{
   flex:1;
   border:none;
-  background:#1dbf73;
-  color:#0b1b11;
+  background: var(--btn-accent);
+  color:#0b1220;
   border-radius: 12px;
   padding: 10px 12px;
   font-weight: 950;
   cursor:pointer;
+  box-shadow: var(--shadow-sm);
 }
+.primaryBtn:hover{ filter: brightness(1.02); transform: translateY(-1px); }
 
 .secondaryBtn:disabled,
 .primaryBtn:disabled{ opacity:.6; cursor:not-allowed; }

@@ -51,7 +51,7 @@ function LoginInner() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border bg-white/10 p-6 backdrop-blur">
+      <div className="w-full max-w-md rounded-2xl border border-black/10 bg-white/70 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.12)] backdrop-blur">
         <h1 className="text-2xl font-bold">Iniciar sesión</h1>
 
         {err && (
@@ -86,7 +86,7 @@ function LoginInner() {
             type="button"
             onClick={handleLogin}
             disabled={loading}
-            className="w-full rounded-lg bg-emerald-500 py-2 font-semibold text-white disabled:opacity-60"
+            className="w-full rounded-lg bg-indigo-600 py-2 font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
           >
             {loading ? "Entrando..." : "Entrar"}
           </button>

@@ -1,9 +1,9 @@
 .topbar{
-  background: rgba(255,255,255,0.92);
-  border: 1px solid rgba(0,0,0,.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 18px;
   padding: 12px 14px;
-  box-shadow: 0 12px 30px rgba(0,0,0,.06);
+  box-shadow: var(--shadow-sm);
 
   display:flex;
   align-items:center;
@@ -78,9 +78,9 @@
   align-items:center;
   gap: 8px;
 
-  border: 1px solid rgba(0,0,0,.12);
-  background: #fff;
-  color: #111;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.75);
+  color: var(--text);
 
   border-radius: 12px;
   padding: 10px 12px;
@@ -90,7 +90,7 @@
 }
 
 .ownerBtn:hover{
-  background: rgba(0,0,0,.04);
+  background: rgba(79, 70, 229, 0.06);
 }
 
 .logout{
@@ -99,7 +99,7 @@
   gap: 8px;
 
   border: none;
-  background: #0b1220;
+  background: var(--btn-dark);
   color: #fff;
 
   border-radius: 12px;

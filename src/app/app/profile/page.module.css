@@ -23,8 +23,8 @@
 }
 
 .backBtn {
-  border: 1px solid rgba(0,0,0,.12);
-  background: #fff;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.75);
   border-radius: 12px;
   padding: 10px 12px;
   font-weight: 800;
@@ -32,11 +32,12 @@
 }
 
 .card {
-  background: rgba(255,255,255,0.92);
-  border: 1px solid rgba(0,0,0,.08);
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 18px;
   padding: 16px;
-  box-shadow: 0 12px 30px rgba(0,0,0,.06);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
 }
 
 .cardTitle {
@@ -86,8 +87,8 @@
 }
 
 .input:focus {
-  border-color: rgba(29,191,115,.7);
-  box-shadow: 0 0 0 3px rgba(29,191,115,.18);
+  border-color: rgba(79, 70, 229, .55);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, .16);
 }
 
 .inputDisabled {
@@ -121,13 +122,15 @@
   padding: 10px 14px;
   font-weight: 900;
   cursor: pointer;
-  background: #1dbf73;
-  color: #0b1b11;
+  background: var(--btn-primary);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
 }
+.primaryBtn:hover { filter: brightness(1.02); transform: translateY(-1px); }
 
 .secondaryBtn {
-  border: 1px solid rgba(0,0,0,.12);
-  background: #fff;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.75);
   border-radius: 12px;
   padding: 10px 12px;
   font-weight: 800;
@@ -141,7 +144,7 @@
   padding: 10px 14px;
   font-weight: 900;
   cursor: pointer;
-  background: #0b1220;
+  background: var(--btn-dark);
   color: #fff;
 }
 

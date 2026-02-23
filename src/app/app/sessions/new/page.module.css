@@ -7,12 +7,12 @@
 .topActions{ display:flex; gap:8px; flex-wrap:wrap; }
 
 .secondary{
-  border:1px solid rgba(0,0,0,.12);
+  border:1px solid var(--border);
   border-radius:10px;
   padding:8px 12px;
   font-weight:900;
   cursor:pointer;
-  background:#fff;
+  background: rgba(255,255,255,0.75);
   font-size:13px;
 }
 .primary{
@@ -22,10 +22,12 @@
   padding:10px 14px;
   font-weight:950;
   cursor:pointer;
-  background:#1dbf73;
-  color:#0b1b11;
+  background: var(--btn-accent);
+  color:#0b1220;
   font-size:14px;
+  box-shadow: var(--shadow-sm);
 }
+.primary:hover{ filter: brightness(1.02); transform: translateY(-1px); }
 .primary:disabled{ opacity:.6; cursor:not-allowed; }
 
 .dark{
@@ -34,7 +36,7 @@
   padding:8px 12px;
   font-weight:950;
   cursor:pointer;
-  background:#0b1220;
+  background: var(--btn-dark);
   color:#fff;
   font-size:13px;
 }
@@ -50,11 +52,12 @@
 }
 
 .card{
-  background: rgba(255,255,255,0.92);
-  border:1px solid rgba(0,0,0,.08);
+  background: var(--surface);
+  border:1px solid var(--border);
   border-radius:18px;
   padding:14px;
-  box-shadow:0 12px 30px rgba(0,0,0,.06);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
 }
 .cardTitle{ font-weight:950; font-size:15px; }
 .cardSub{ margin-top:4px; font-size:12px; opacity:.75; }
@@ -81,18 +84,19 @@
   font-size:14px;
 }
 .input:focus{
-  border-color: rgba(29,191,115,.7);
-  box-shadow: 0 0 0 3px rgba(29,191,115,.18);
+  border-color: rgba(79, 70, 229, .55);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, .16);
 }
 
 .hint{ font-size:12px; opacity:.7; }
 
 .result{
-  background: rgba(255,255,255,0.92);
-  border:1px solid rgba(29,191,115,.25);
+  background: var(--surface);
+  border:1px solid rgba(79, 70, 229, .22);
   border-radius:18px;
   padding:14px;
-  box-shadow:0 12px 30px rgba(0,0,0,.06);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
 }
 
 .resultTop{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
@@ -106,8 +110,8 @@
 .linkLabel{ font-weight:950; font-size:12px; opacity:.85; }
 
 .copyBtn{
-  border:1px solid rgba(0,0,0,.12);
-  background:#fff;
+  border:1px solid var(--border);
+  background: rgba(255,255,255,0.75);
   border-radius:999px;
   padding:7px 10px;
   font-weight:950;

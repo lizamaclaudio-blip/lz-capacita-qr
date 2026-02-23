@@ -69,7 +69,7 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border bg-white/10 p-6 backdrop-blur">
+      <div className="w-full max-w-md rounded-2xl border border-black/10 bg-white/70 p-6 shadow-[0_18px_60px_rgba(0,0,0,0.12)] backdrop-blur">
         <h1 className="text-2xl font-bold">Crear cuenta</h1>
 
         <p className="mt-2 text-sm opacity-70">
@@ -82,7 +82,7 @@ export default function SignupPage() {
           </div>
         )}
         {msg && (
-          <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          <div className="mt-4 rounded-lg border border-teal-200 bg-teal-50 p-3 text-sm text-teal-900">
             {msg}
           </div>
         )}
@@ -135,7 +135,7 @@ export default function SignupPage() {
 
           <button
             disabled={loading}
-            className="w-full rounded-lg bg-emerald-500 py-2 font-semibold text-white disabled:opacity-60"
+            className="w-full rounded-lg bg-amber-500 py-2 font-semibold text-slate-900 hover:bg-amber-400 disabled:opacity-60"
           >
             {loading ? "Creando..." : "Crear cuenta"}
           </button>

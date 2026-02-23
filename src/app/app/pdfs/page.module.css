@@ -8,13 +8,15 @@
 .primary{
   border:none; border-radius:12px; padding:10px 14px;
   font-weight:950; cursor:pointer;
-  background:#1dbf73; color:#0b1b11;
+  background: var(--btn-primary); color:#fff;
+  box-shadow: var(--shadow-sm);
 }
+.primary:hover{ filter: brightness(1.02); transform: translateY(-1px); }
 .secondary{
-  border:1px solid rgba(0,0,0,.12);
+  border:1px solid var(--border);
   border-radius:12px; padding:10px 14px;
   font-weight:900; cursor:pointer;
-  background:#fff;
+  background: rgba(255,255,255,0.75);
 }
 .primary:disabled{ opacity:.6; cursor:not-allowed; }
 
@@ -34,22 +36,23 @@
   background:#fff;
 }
 .search:focus{
-  border-color: rgba(29,191,115,.7);
-  box-shadow: 0 0 0 3px rgba(29,191,115,.18);
+  border-color: rgba(79, 70, 229, .55);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, .16);
 }
 .toast{
   font-size:12px; font-weight:900;
   padding:8px 10px; border-radius:999px;
-  background:rgba(29,191,115,.12);
-  border:1px solid rgba(29,191,115,.22);
+  background: rgba(245, 158, 11, .14);
+  border: 1px solid rgba(245, 158, 11, .26);
 }
 
 .listCard{
-  background: rgba(255,255,255,0.92);
-  border:1px solid rgba(0,0,0,.08);
+  background: var(--surface);
+  border:1px solid var(--border);
   border-radius:18px;
   padding:12px;
-  box-shadow:0 12px 30px rgba(0,0,0,.06);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
 }
 
 .muted{ font-size:13px; opacity:.75; padding: 10px 2px; }
@@ -62,8 +65,8 @@
   gap: 12px;
   padding: 12px;
   border-radius: 16px;
-  border: 1px solid rgba(0,0,0,.08);
-  background: rgba(255,255,255,0.92);
+  border: 1px solid var(--border);
+  background: var(--surface);
 }
 @media (max-width: 980px){
   .row{ flex-direction:column; align-items:stretch; }
@@ -76,8 +79,8 @@
 .badge{
   font-size:11px; font-weight:950;
   padding:6px 10px; border-radius:999px;
-  border:1px solid rgba(29,191,115,.25);
-  background: rgba(29,191,115,.12);
+  border:1px solid rgba(20, 184, 166, .28);
+  background: rgba(20, 184, 166, .14);
   white-space: nowrap;
 }
 
@@ -107,14 +110,15 @@
 
 .btnPdf{
   border:none;
-  background:#1dbf73;
-  color:#0b1b11;
+  background: var(--btn-accent);
+  color:#0b1220;
   border-radius:12px;
   padding:8px 10px;
   font-weight:950;
   cursor:pointer;
   font-size: 13px;
 }
+.btnPdf:hover{ filter: brightness(1.02); transform: translateY(-1px); }
 .btnThin{
   border:1px solid rgba(0,0,0,.12);
   background: rgba(255,255,255,.92);
@@ -126,7 +130,7 @@
 }
 .btnDark{
   border:none;
-  background:#0b1220;
+  background: var(--btn-dark);
   color:#fff;
   border-radius:12px;
   padding:8px 10px;
