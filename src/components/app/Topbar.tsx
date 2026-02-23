@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import styles from "./Topbar.module.css";
 import { IconLogout } from "./icons";
@@ -12,7 +13,6 @@ type Props = {
 };
 
 function formatDateCL(d: Date) {
-  // ej: "vie, 21 feb 2026"
   return new Intl.DateTimeFormat("es-CL", {
     weekday: "short",
     year: "numeric",
@@ -22,7 +22,6 @@ function formatDateCL(d: Date) {
 }
 
 function formatTimeCL(d: Date) {
-  // ej: "20:32"
   return new Intl.DateTimeFormat("es-CL", {
     hour: "2-digit",
     minute: "2-digit",
@@ -30,7 +29,12 @@ function formatTimeCL(d: Date) {
   }).format(d);
 }
 
-export default function Topbar({ greetingName, email, subtitle = "Panel LZ Capacita QR", onLogout }: Props) {
+export default function Topbar({
+  greetingName,
+  email,
+  subtitle = "Panel LZ Capacita QR",
+  onLogout,
+}: Props) {
   const [now, setNow] = useState<Date>(() => new Date());
 
   // actualiza cada 30s (suficiente para reloj)
@@ -49,6 +53,9 @@ export default function Topbar({ greetingName, email, subtitle = "Panel LZ Capac
   const dateStr = useMemo(() => formatDateCL(now), [now]);
   const timeStr = useMemo(() => formatTimeCL(now), [now]);
 
+  // ✅ SOLO TU CUENTA ve el botón Owner
+  const isOwner = (email ?? "").toLowerCase() === "lizamaclaudio@gmail.com";
+
   return (
     <header className={styles.topbar}>
       <div className={styles.left}>
@@ -65,6 +72,12 @@ export default function Topbar({ greetingName, email, subtitle = "Panel LZ Capac
         </div>
 
         {email && <div className={styles.email}>{email}</div>}
+
+        {isOwner && (
+          <Link href="/owner" className={styles.ownerBtn} title="Panel maestro (dueño)">
+            🛠 Panel Dueño
+          </Link>
+        )}
 
         <button type="button" className={styles.logout} onClick={onLogout}>
           <IconLogout className={styles.logoutIcon} />

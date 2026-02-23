@@ -72,6 +72,27 @@
   white-space: nowrap;
 }
 
+/* ✅ Botón Owner (solo aparece a lizamaclaudio@gmail.com) */
+.ownerBtn{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+
+  border: 1px solid rgba(0,0,0,.12);
+  background: #fff;
+  color: #111;
+
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-weight: 950;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.ownerBtn:hover{
+  background: rgba(0,0,0,.04);
+}
+
 .logout{
   display:flex;
   align-items:center;
