@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
     const { data: session, error } = await sb
       .from("sessions")
       .select(
-        "id, code, topic, location, session_date, trainer_name, status, closed_at, companies(name,address)"
+        "id, code, topic, location, session_date, trainer_name, status, closed_at, companies(name,address,logo_path)"
       )
       .ilike("code", code) // ✅ case-insensitive exact match
       .single();

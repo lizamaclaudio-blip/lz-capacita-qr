@@ -9,6 +9,8 @@ type Company = {
   id: string;
   name: string;
   address: string | null;
+  rut?: string | null;
+  logo_path?: string | null;
   created_at: string;
 };
 
@@ -80,6 +82,15 @@ export default function CompanyPage() {
     if (typeof window === "undefined") return "";
     return window.location.origin;
   }, []);
+
+  const companyLogoUrl = useMemo(() => {
+    const p = (company as any)?.logo_path ?? null;
+    if (!p) return null;
+    const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!base) return null;
+    const clean = String(p).replace(/^company-logos\//, "");
+    return `${base}/storage/v1/object/public/company-logos/${clean}`;
+  }, [company]);
 
   // Persist toggle (localStorage)
   useEffect(() => {
@@ -388,7 +399,17 @@ export default function CompanyPage() {
             ← Volver a empresas
           </button>
 
-          <h1 className={styles.h1}>{companyTitle}</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {companyLogoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={companyLogoUrl}
+                alt="Logo empresa"
+                style={{ height: 44, width: "auto", borderRadius: 12, background: "rgba(255,255,255,0.7)", padding: 6 }}
+              />
+            ) : null}
+            <h1 className={styles.h1} style={{ margin: 0 }}>{companyTitle}</h1>
+          </div>
           <p className={styles.sub}>
             {companySub} · Administra charlas y comparte el QR público de asistencia.
           </p>

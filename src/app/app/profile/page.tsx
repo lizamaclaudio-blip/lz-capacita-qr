@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import { cleanRut, isValidRut } from "@/lib/rut";
 import styles from "./page.module.css";
 
 export default function ProfilePage() {
@@ -13,7 +14,15 @@ export default function ProfilePage() {
   const [email, setEmail] = useState<string>("");
   const [userId, setUserId] = useState<string>("");
 
-  const [fullName, setFullName] = useState<string>("");
+  const [firstName, setFirstName] = useState<string>("");
+  const [lastName, setLastName] = useState<string>("");
+  const [rut, setRut] = useState<string>("");
+  const [address, setAddress] = useState<string>("");
+  const [phone, setPhone] = useState<string>("");
+  const [region, setRegion] = useState<string>("");
+  const [comuna, setComuna] = useState<string>("");
+  const [city, setCity] = useState<string>("");
+
   const [savingName, setSavingName] = useState(false);
 
   const [newPassword, setNewPassword] = useState("");
@@ -23,6 +32,7 @@ export default function ProfilePage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  const fullName = useMemo(() => `${firstName.trim()} ${lastName.trim()}`.trim(), [firstName, lastName]);
   const nameNormalized = useMemo(() => fullName.trim(), [fullName]);
 
   useEffect(() => {
@@ -52,13 +62,20 @@ export default function ProfilePage() {
       setEmail(u.email ?? "");
 
       const md = (u.user_metadata ?? {}) as Record<string, any>;
-      const initialName =
+      const initialFull =
         (typeof md.full_name === "string" && md.full_name) ||
         (typeof md.name === "string" && md.name) ||
         (typeof md.display_name === "string" && md.display_name) ||
         "";
 
-      setFullName(initialName);
+      setFirstName((typeof md.first_name === "string" && md.first_name) || initialFull.split(" ").slice(0, -1).join(" ") || "");
+      setLastName((typeof md.last_name === "string" && md.last_name) || initialFull.split(" ").slice(-1).join(" ") || "");
+      setRut((typeof md.rut === "string" && md.rut) || "");
+      setAddress((typeof md.address === "string" && md.address) || "");
+      setPhone((typeof md.phone === "string" && md.phone) || "");
+      setRegion((typeof md.region === "string" && md.region) || "");
+      setComuna((typeof md.comuna === "string" && md.comuna) || "");
+      setCity((typeof md.city === "string" && md.city) || "");
       setLoading(false);
     })();
 
@@ -71,15 +88,40 @@ export default function ProfilePage() {
     setErr(null);
     setMsg(null);
 
-    if (!nameNormalized) {
-      setErr("Ingresa tu nombre para guardarlo.");
+    if (!firstName.trim()) {
+      setErr("Ingresa tus nombres.");
+      return;
+    }
+    if (!lastName.trim()) {
+      setErr("Ingresa tus apellidos.");
+      return;
+    }
+
+    const rutRaw = rut.trim();
+    if (!rutRaw) {
+      setErr("RUT es obligatorio.");
+      return;
+    }
+    const rutCleaned = cleanRut(rutRaw);
+    if (!isValidRut(rutCleaned)) {
+      setErr("RUT inválido.");
       return;
     }
 
     setSavingName(true);
 
     const { error } = await supabaseBrowser.auth.updateUser({
-      data: { full_name: nameNormalized },
+      data: {
+        full_name: nameNormalized,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        rut: rutCleaned,
+        address: address.trim() || null,
+        phone: phone.trim() || null,
+        region: region.trim() || null,
+        comuna: comuna.trim() || null,
+        city: city.trim() || null,
+      },
     });
 
     setSavingName(false);
@@ -89,7 +131,7 @@ export default function ProfilePage() {
       return;
     }
 
-    setMsg("✅ Nombre actualizado. (Se verá en el saludo del panel)");
+    setMsg("✅ Perfil actualizado.");
   }
 
   async function changePassword() {
@@ -160,13 +202,89 @@ export default function ProfilePage() {
               </div>
 
               <div className={styles.fieldWide}>
-                <label className={styles.label}>Nombre (se muestra en el panel)</label>
-                <input
-                  className={styles.input}
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  placeholder="Ej: Claudio Lizama"
-                />
+                <label className={styles.label}>Datos personales</label>
+
+                <div className={styles.grid2}>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Nombres *</label>
+                    <input
+                      className={styles.input}
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="Ej: Claudio Andrés"
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <label className={styles.label}>Apellidos *</label>
+                    <input
+                      className={styles.input}
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="Ej: Lizama"
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <label className={styles.label}>RUT *</label>
+                    <input
+                      className={styles.input}
+                      value={rut}
+                      onChange={(e) => setRut(e.target.value)}
+                      placeholder="Ej: 12.345.678-9"
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <label className={styles.label}>Teléfono</label>
+                    <input
+                      className={styles.input}
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="Ej: +56 9 1234 5678"
+                    />
+                  </div>
+
+                  <div className={styles.fieldWide}>
+                    <label className={styles.label}>Dirección</label>
+                    <input
+                      className={styles.input}
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      placeholder="Ej: Calle / N°"
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <label className={styles.label}>Región</label>
+                    <input
+                      className={styles.input}
+                      value={region}
+                      onChange={(e) => setRegion(e.target.value)}
+                      placeholder="Ej: Los Lagos"
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <label className={styles.label}>Comuna</label>
+                    <input
+                      className={styles.input}
+                      value={comuna}
+                      onChange={(e) => setComuna(e.target.value)}
+                      placeholder="Ej: Puerto Montt"
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <label className={styles.label}>Ciudad</label>
+                    <input
+                      className={styles.input}
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="Ej: Puerto Montt"
+                    />
+                  </div>
+                </div>
 
                 <div className={styles.actionsRow}>
                   <button
@@ -175,11 +293,11 @@ export default function ProfilePage() {
                     onClick={saveProfile}
                     disabled={savingName}
                   >
-                    {savingName ? "Guardando…" : "Guardar nombre"}
+                    {savingName ? "Guardando…" : "Guardar perfil"}
                   </button>
 
                   <div className={styles.hint}>
-                    Guardamos en <span className={styles.mono}>user_metadata.full_name</span>
+                    Se refleja en el saludo del panel.
                   </div>
                 </div>
               </div>

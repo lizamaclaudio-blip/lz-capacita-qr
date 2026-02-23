@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import { cleanRut, isValidRut } from "@/lib/rut";
 import styles from "./EditCompanyModal.module.css";
 
 export type Company = {
@@ -31,7 +32,6 @@ export default function EditCompanyModal({
   onSaved: () => Promise<void> | void;
 }) {
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   // ✅ La clave: el ID SIEMPRE viene desde company?.id
@@ -47,13 +47,21 @@ export default function EditCompanyModal({
   const [contactEmail, setContactEmail] = useState("");
   const [contactPhone, setContactPhone] = useState("");
 
-  // logo (aún no conectamos bucket aquí, solo dejamos placeholder)
+  // logo
   const [logoFile, setLogoFile] = useState<File | null>(null);
 
   const logoPreview = useMemo(() => {
     if (!logoFile) return null;
     return URL.createObjectURL(logoFile);
   }, [logoFile]);
+
+  const currentLogoUrl = useMemo(() => {
+    if (!company?.logo_path) return null;
+    const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!base) return null;
+    const clean = String(company.logo_path).replace(/^company-logos\//, "");
+    return `${base}/storage/v1/object/public/company-logos/${clean}`;
+  }, [company?.logo_path]);
 
   useEffect(() => {
     if (!open) return;
@@ -85,11 +93,11 @@ export default function EditCompanyModal({
 
   if (!open) return null;
 
-  async function getTokenOrThrow() {
+  async function getSessionOrThrow() {
     const { data } = await supabaseBrowser.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) throw new Error("Sesión expirada. Vuelve a iniciar sesión.");
-    return token;
+    const session = data.session;
+    if (!session?.access_token) throw new Error("Sesión expirada. Vuelve a iniciar sesión.");
+    return session;
   }
 
   async function saveChanges() {
@@ -105,21 +113,53 @@ export default function EditCompanyModal({
       return;
     }
 
+    // Validaciones RUT (si vienen)
+    const rutRaw = rut.trim();
+    const rutCleaned = rutRaw ? cleanRut(rutRaw) : null;
+    if (rutCleaned && !isValidRut(rutCleaned)) {
+      setMsg("RUT empresa inválido.");
+      return;
+    }
+
+    const cRutRaw = contactRut.trim();
+    const cRutCleaned = cRutRaw ? cleanRut(cRutRaw) : null;
+    if (cRutCleaned && !isValidRut(cRutCleaned)) {
+      setMsg("RUT contacto inválido.");
+      return;
+    }
+
     setSaving(true);
     try {
-      const token = await getTokenOrThrow();
+      const session = await getSessionOrThrow();
+      const token = session.access_token;
+
+      let logoPathToSave: string | null | undefined = undefined;
+      if (logoFile && session.user?.id && companyId) {
+        const safeName = String(logoFile.name || "logo")
+          .toLowerCase()
+          .replace(/[^a-z0-9.\-_]/g, "-")
+          .slice(0, 80);
+
+        const path = `${session.user.id}/${companyId}/${Date.now()}-${safeName}`;
+
+        const up = await supabaseBrowser.storage
+          .from("company-logos")
+          .upload(path, logoFile, { upsert: true, contentType: logoFile.type || "image/png" });
+
+        if (up.error) throw up.error;
+        logoPathToSave = path;
+      }
 
       const payload = {
         name: name.trim(),
-        rut: rut.trim() ? rut.trim() : null,
+        rut: rutCleaned,
         address: address.trim() ? address.trim() : null,
 
         contact_name: contactName.trim() ? contactName.trim() : null,
-        contact_rut: contactRut.trim() ? contactRut.trim() : null,
+        contact_rut: cRutCleaned,
         contact_email: contactEmail.trim() ? contactEmail.trim() : null,
         contact_phone: contactPhone.trim() ? contactPhone.trim() : null,
-
-        // logo_path queda igual por ahora (Storage lo vemos después)
+        ...(typeof logoPathToSave !== "undefined" ? { logo_path: logoPathToSave } : {}),
       };
 
       const res = await fetch(`/api/app/companies/${companyId}`, {
@@ -147,48 +187,6 @@ export default function EditCompanyModal({
       setMsg(e?.message || "Error guardando cambios");
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function deleteCompany() {
-    setMsg(null);
-
-    if (!companyId) {
-      setMsg("Missing companyId (la empresa no tiene id).");
-      return;
-    }
-
-    const ok = window.confirm(
-      "¿Seguro que deseas ELIMINAR esta empresa?\n\nEsto no se puede deshacer."
-    );
-    if (!ok) return;
-
-    setDeleting(true);
-    try {
-      const token = await getTokenOrThrow();
-
-      const res = await fetch(`/api/app/companies/${companyId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const json = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        setMsg(json?.error || "No se pudo eliminar la empresa");
-        setDeleting(false);
-        return;
-      }
-
-      setMsg("✅ Empresa eliminada.");
-      await onSaved?.();
-      onClose();
-    } catch (e: any) {
-      setMsg(e?.message || "Error eliminando empresa");
-    } finally {
-      setDeleting(false);
     }
   }
 
@@ -250,11 +248,7 @@ export default function EditCompanyModal({
 
               <div className={styles.field}>
                 <label className={styles.label}>
-                  Logo
-                  <span className={styles.hint}>
-                    {" "}
-                    (el logo lo conectamos al bucket en el siguiente paso)
-                  </span>
+                  Logo empresa
                 </label>
                 <input
                   className={styles.file}
@@ -263,10 +257,14 @@ export default function EditCompanyModal({
                   onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
                 />
 
-                {logoPreview && (
+                {(logoPreview || currentLogoUrl) && (
                   <div className={styles.previewWrap}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={logoPreview} className={styles.previewImg} alt="preview" />
+                    <img
+                      src={logoPreview || currentLogoUrl || ""}
+                      className={styles.previewImg}
+                      alt="logo"
+                    />
                   </div>
                 )}
               </div>
@@ -320,24 +318,9 @@ export default function EditCompanyModal({
               <button
                 className={styles.save}
                 onClick={saveChanges}
-                disabled={saving || deleting}
+                disabled={saving}
               >
                 {saving ? "Guardando..." : "Guardar cambios"}
-              </button>
-            </div>
-
-            <div className={styles.dangerZone}>
-              <div className={styles.dangerTitle}>Eliminar empresa</div>
-              <div className={styles.dangerText}>
-                Esto elimina la empresa. Si tienes sesiones asociadas, puede fallar según tus reglas.
-              </div>
-
-              <button
-                className={styles.delete}
-                onClick={deleteCompany}
-                disabled={saving || deleting}
-              >
-                {deleting ? "Eliminando..." : "Eliminar empresa"}
               </button>
             </div>
 

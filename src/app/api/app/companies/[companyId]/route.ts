@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { cleanRut, isValidRut } from "@/lib/rut";
 
 export const dynamic = "force-dynamic";
 
@@ -81,13 +82,23 @@ export async function PATCH(req: NextRequest, ctx?: any) {
       patch.address = body.address ? String(body.address).trim() : null;
     }
     if (typeof body.rut === "string" || body.rut === null) {
-      patch.rut = body.rut ? String(body.rut).trim() : null;
+      const raw = body.rut ? String(body.rut).trim() : "";
+      const cleaned = raw ? cleanRut(raw) : "";
+      if (cleaned && !isValidRut(cleaned)) {
+        return NextResponse.json({ error: "RUT empresa inválido" }, { status: 400 });
+      }
+      patch.rut = cleaned || null;
     }
     if (typeof body.contact_name === "string" || body.contact_name === null) {
       patch.contact_name = body.contact_name ? String(body.contact_name).trim() : null;
     }
     if (typeof body.contact_rut === "string" || body.contact_rut === null) {
-      patch.contact_rut = body.contact_rut ? String(body.contact_rut).trim() : null;
+      const raw = body.contact_rut ? String(body.contact_rut).trim() : "";
+      const cleaned = raw ? cleanRut(raw) : "";
+      if (cleaned && !isValidRut(cleaned)) {
+        return NextResponse.json({ error: "RUT contacto inválido" }, { status: 400 });
+      }
+      patch.contact_rut = cleaned || null;
     }
     if (typeof body.contact_email === "string" || body.contact_email === null) {
       patch.contact_email = body.contact_email ? String(body.contact_email).trim() : null;

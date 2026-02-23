@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import styles from "./page.module.css";
 import { SignaturePad, type SignaturePadRef } from "@/components/SignaturePad";
+import { cleanRut, isValidRut } from "@/lib/rut";
 
 type SessionInfo = {
   id: string;
@@ -14,7 +15,7 @@ type SessionInfo = {
   trainer_name: string | null;
   status: string | null;
   closed_at: string | null;
-  company: { name: string; address: string | null } | null;
+  company: { name: string; address: string | null; logo_path?: string | null } | null;
 };
 
 function fmtCL(iso?: string | null) {
@@ -43,6 +44,15 @@ export default function PublicCheckinPage() {
   const [okMsg, setOkMsg] = useState<string | null>(null);
 
   const sigRef = useRef<SignaturePadRef | null>(null);
+
+  const companyLogoUrl = useMemo(() => {
+    const p = session?.company?.logo_path ?? null;
+    if (!p) return null;
+    const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    if (!base) return null;
+    const clean = String(p).replace(/^company-logos\//, "");
+    return `${base}/storage/v1/object/public/company-logos/${clean}`;
+  }, [session?.company?.logo_path]);
 
   const isClosed = useMemo(() => {
     const st = (session?.status ?? "").toLowerCase();
@@ -82,6 +92,9 @@ export default function PublicCheckinPage() {
 
     if (!fullName.trim()) return setError("Ingresa tu nombre.");
     if (!rut.trim()) return setError("Ingresa tu RUT.");
+
+    const rutClean = cleanRut(rut.trim());
+    if (!isValidRut(rutClean)) return setError("RUT inválido.");
     if (isClosed) return setError("Esta charla está cerrada.");
 
     if (!sigRef.current || sigRef.current.isEmpty()) {
@@ -99,7 +112,7 @@ export default function PublicCheckinPage() {
         body: JSON.stringify({
           code,
           full_name: fullName.trim(),
-          rut: rut.trim(),
+          rut: rutClean,
           role: role.trim() ? role.trim() : null,
           signature_data_url,
         }),
@@ -132,6 +145,18 @@ export default function PublicCheckinPage() {
             <div className={styles.brandSub}>Registro de asistencia</div>
           </div>
         </div>
+
+        {companyLogoUrl && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={companyLogoUrl}
+              alt="Logo empresa"
+              style={{ height: 34, width: "auto", borderRadius: 8, background: "rgba(255,255,255,0.6)", padding: 4 }}
+            />
+            <div style={{ fontSize: 12, opacity: 0.8 }}>Empresa</div>
+          </div>
+        )}
 
         <div className={styles.header}>
           <div className={styles.h1}>Asistencia · {code}</div>

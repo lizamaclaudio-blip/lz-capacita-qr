@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { cleanRut, isValidRut } from "@/lib/rut";
 
 export const dynamic = "force-dynamic";
 
@@ -64,20 +65,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nombre empresa es obligatorio" }, { status: 400 });
     }
 
+    // Validar RUT empresa si viene (para beta: lo dejamos requerido a nivel UI, pero aquí validamos igual)
+    const rutRaw = typeof body.rut === "string" ? body.rut.trim() : "";
+    const rutCleaned = rutRaw ? cleanRut(rutRaw) : "";
+    if (rutCleaned && !isValidRut(rutCleaned)) {
+      return NextResponse.json({ error: "RUT empresa inválido" }, { status: 400 });
+    }
+
+    const cRutRaw = typeof body.contact_rut === "string" ? body.contact_rut.trim() : "";
+    const cRutCleaned = cRutRaw ? cleanRut(cRutRaw) : "";
+    if (cRutCleaned && !isValidRut(cRutCleaned)) {
+      return NextResponse.json({ error: "RUT contacto inválido" }, { status: 400 });
+    }
+
     const payload: any = {
       owner_id: auth.user.id,
       name,
       address: typeof body.address === "string" && body.address.trim() ? body.address.trim() : null,
-      rut: typeof body.rut === "string" && body.rut.trim() ? body.rut.trim() : null,
+      rut: rutCleaned || null,
 
       contact_name:
         typeof body.contact_name === "string" && body.contact_name.trim()
           ? body.contact_name.trim()
           : null,
       contact_rut:
-        typeof body.contact_rut === "string" && body.contact_rut.trim()
-          ? body.contact_rut.trim()
-          : null,
+        cRutCleaned || null,
       contact_email:
         typeof body.contact_email === "string" && body.contact_email.trim()
           ? body.contact_email.trim()

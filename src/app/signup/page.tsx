@@ -8,8 +8,14 @@ import { cleanRut, isValidRut } from "@/lib/rut";
 export default function SignupPage() {
   const router = useRouter();
 
-  const [fullName, setFullName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [rut, setRut] = useState("");
+  const [address, setAddress] = useState("");
+  const [phone, setPhone] = useState("");
+  const [region, setRegion] = useState("");
+  const [comuna, setComuna] = useState("");
+  const [city, setCity] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
@@ -23,8 +29,12 @@ export default function SignupPage() {
     setErr(null);
     setMsg(null);
 
-    const name = fullName.trim();
-    if (!name) return setErr("Ingresa tu nombre.");
+    const fn = firstName.trim();
+    const ln = lastName.trim();
+    if (!fn) return setErr("Ingresa tus nombres.");
+    if (!ln) return setErr("Ingresa tus apellidos.");
+
+    const fullName = `${fn} ${ln}`.trim();
 
     const mail = email.trim();
     if (!mail) return setErr("Ingresa tu correo.");
@@ -33,11 +43,9 @@ export default function SignupPage() {
     if (password !== password2) return setErr("Las contraseñas no coinciden.");
 
     const rutRaw = rut.trim();
-    let rutClean: string | null = null;
-    if (rutRaw) {
-      rutClean = cleanRut(rutRaw);
-      if (!isValidRut(rutClean)) return setErr("RUT inválido.");
-    }
+    if (!rutRaw) return setErr("RUT es obligatorio.");
+    const rutClean = cleanRut(rutRaw);
+    if (!isValidRut(rutClean)) return setErr("RUT inválido.");
 
     setLoading(true);
 
@@ -46,8 +54,15 @@ export default function SignupPage() {
       password,
       options: {
         data: {
-          full_name: name,
+          full_name: fullName,
+          first_name: fn,
+          last_name: ln,
           rut: rutClean,
+          address: address.trim() || null,
+          phone: phone.trim() || null,
+          region: region.trim() || null,
+          comuna: comuna.trim() || null,
+          city: city.trim() || null,
         },
       },
     });
@@ -88,21 +103,74 @@ export default function SignupPage() {
         )}
 
         <form onSubmit={onSubmit} className="mt-5 space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input
+              className="w-full rounded-lg border px-3 py-2"
+              placeholder="Nombres"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              autoComplete="given-name"
+              required
+            />
+
+            <input
+              className="w-full rounded-lg border px-3 py-2"
+              placeholder="Apellidos"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              autoComplete="family-name"
+              required
+            />
+          </div>
+
           <input
             className="w-full rounded-lg border px-3 py-2"
-            placeholder="Nombre completo"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            autoComplete="name"
+            placeholder="RUT (ej: 12.345.678-9)"
+            value={rut}
+            onChange={(e) => setRut(e.target.value)}
             required
           />
 
           <input
             className="w-full rounded-lg border px-3 py-2"
-            placeholder="RUT (opcional)"
-            value={rut}
-            onChange={(e) => setRut(e.target.value)}
+            placeholder="Dirección"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            autoComplete="street-address"
           />
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input
+              className="w-full rounded-lg border px-3 py-2"
+              placeholder="Teléfono"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              autoComplete="tel"
+            />
+
+            <input
+              className="w-full rounded-lg border px-3 py-2"
+              placeholder="Ciudad"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <input
+              className="w-full rounded-lg border px-3 py-2"
+              placeholder="Región"
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+            />
+
+            <input
+              className="w-full rounded-lg border px-3 py-2"
+              placeholder="Comuna"
+              value={comuna}
+              onChange={(e) => setComuna(e.target.value)}
+            />
+          </div>
 
           <input
             className="w-full rounded-lg border px-3 py-2"

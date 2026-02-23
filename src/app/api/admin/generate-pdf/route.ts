@@ -24,6 +24,14 @@ async function downloadStorageBytes(pathInBucket: string) {
   return Buffer.from(ab);
 }
 
+async function downloadCompanyLogoBytes(pathInBucket: string) {
+  const sb = supabaseServer();
+  const { data, error } = await sb.storage.from("company-logos").download(pathInBucket);
+  if (error || !data) throw new Error(error?.message || "No se pudo descargar logo empresa");
+  const ab = await data.arrayBuffer();
+  return Buffer.from(ab);
+}
+
 function clampText(text: string, max: number) {
   const t = String(text ?? "");
   return t.length > max ? t.slice(0, max - 1) + "…" : t;
@@ -120,7 +128,7 @@ export async function POST(req: NextRequest) {
     const { data: session, error: sErr } = await sb
       .from("sessions")
       .select(
-        "id, code, topic, location, session_date, trainer_name, status, closed_at, trainer_signature_path, admin_passcode, pdf_path, pdf_generated_at, companies(name, address)"
+        "id, code, topic, location, session_date, trainer_name, status, closed_at, trainer_signature_path, admin_passcode, pdf_path, pdf_generated_at, companies(name, address, logo_path)"
       )
       .eq("code", code)
       .single();
@@ -163,6 +171,7 @@ export async function POST(req: NextRequest) {
 
     const empresa = company?.name ?? "";
     const direccion = company?.address ?? "-";
+    const companyLogoPath = company?.logo_path ? String(company.logo_path) : null;
 
     const tema = (session as any).topic ?? "";
     const lugar = (session as any).location ?? "-";
@@ -203,6 +212,22 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
+    // Logo empresa (si existe)
+    let companyLogo: any = null;
+    if (companyLogoPath) {
+      try {
+        const bytes = await downloadCompanyLogoBytes(companyLogoPath);
+        // Detectar PNG vs JPG
+        if (bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+          companyLogo = await pdfDoc.embedPng(bytes);
+        } else {
+          companyLogo = await pdfDoc.embedJpg(bytes);
+        }
+      } catch {
+        // si falla, no bloqueamos el PDF
+      }
+    }
+
     const addPage = () => pdfDoc.addPage([pageW, pageH]);
 
     let page = addPage();
@@ -241,6 +266,20 @@ export async function POST(req: NextRequest) {
         y: headerBottom + headerH - logoH - 18,
         width: logoW,
         height: logoH,
+      });
+    }
+
+    if (companyLogo) {
+      const logoH = 44;
+      const logoW = (companyLogo.width / companyLogo.height) * logoH;
+      const maxW = 160;
+      const finalW = Math.min(logoW, maxW);
+      const finalH = (finalW / logoW) * logoH;
+      page.drawImage(companyLogo, {
+        x: margin + contentW - finalW - 12,
+        y: headerBottom + headerH - finalH - 22,
+        width: finalW,
+        height: finalH,
       });
     }
 
