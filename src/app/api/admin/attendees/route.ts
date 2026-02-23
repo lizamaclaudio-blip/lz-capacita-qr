@@ -1,59 +1,41 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { cleanRut } from "@/lib/rut";
 
-function getBearer(req: NextRequest) {
-  const auth = req.headers.get("authorization") || "";
-  const m = auth.match(/^Bearer\s+(.+)$/i);
-  return m?.[1] || null;
-}
-
-function adminSet(): Set<string> {
-  return new Set(
-    (process.env.ADMIN_EMAILS || "")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean)
-  );
-}
-
-async function requireAdmin(req: NextRequest) {
-  const token = getBearer(req);
-  if (!token) return { ok: false as const, status: 401, error: "Debes iniciar sesión." };
-
-  const admins = adminSet();
-  if (admins.size === 0) return { ok: false as const, status: 500, error: "Falta ADMIN_EMAILS en env." };
-
-  const sb = supabaseServer();
-  const { data, error } = await sb.auth.getUser(token);
-  if (error || !data?.user?.email) return { ok: false as const, status: 401, error: "Sesión inválida." };
-
-  const email = data.user.email.toLowerCase();
-  if (!admins.has(email)) return { ok: false as const, status: 403, error: "No autorizado (email no permitido)." };
-
-  return { ok: true as const, email };
-}
-
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
     const code = (url.searchParams.get("code") || "").toUpperCase().trim();
-    if (!code) return NextResponse.json({ error: "Falta code" }, { status: 400 });
+    const passcodeRaw = (url.searchParams.get("passcode") || "").trim();
 
-    const auth = await requireAdmin(req);
-    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+    if (!code) return NextResponse.json({ error: "Falta code" }, { status: 400 });
+    if (!passcodeRaw) return NextResponse.json({ error: "Falta passcode (RUT relator)" }, { status: 401 });
 
     const sb = supabaseServer();
 
+    // ✅ Traemos todo para no romper si la columna aún no existe
     const { data: session, error: sErr } = await sb
       .from("sessions")
-      .select("id, code, topic, location, trainer_name, status, closed_at, trainer_signature_path, companies(name, address)")
+      .select("*, companies(name, address)")
       .eq("code", code)
       .single();
 
     if (sErr || !session) return NextResponse.json({ error: "Charla no existe" }, { status: 404 });
+
+    const expected = session.admin_passcode ? cleanRut(String(session.admin_passcode)) : null;
+    const provided = cleanRut(passcodeRaw);
+
+    // ✅ Si no hay admin_passcode aún, fallback a ADMIN_PASSCODE global (opcional)
+    if (expected) {
+      if (provided !== expected) return NextResponse.json({ error: "RUT/passcode incorrecto" }, { status: 401 });
+    } else {
+      if (!process.env.ADMIN_PASSCODE || passcodeRaw !== process.env.ADMIN_PASSCODE) {
+        return NextResponse.json({ error: "Passcode incorrecto (configura sessions.admin_passcode)" }, { status: 401 });
+      }
+    }
 
     const { data: attendees, error: aErr } = await sb
       .from("attendees")

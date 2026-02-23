@@ -1,8 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
-import { supabaseBrowser } from "@/lib/supabase/browser";
+import { useEffect, useRef, useState } from "react";
 import { SignaturePad, type SignaturePadRef } from "@/components/SignaturePad";
 
 export default function AdminSession() {
@@ -10,13 +9,12 @@ export default function AdminSession() {
   const raw = (params?.code ?? "") as unknown as string | string[];
   const code = (Array.isArray(raw) ? raw[0] : raw).toUpperCase().trim();
 
-  const [token, setToken] = useState<string | null>(null);
-  const [email, setEmail] = useState<string | null>(null);
-
+  const [passcode, setPasscode] = useState("");
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const sigRef = useRef<SignaturePadRef | null>(null);
+
   const [closing, setClosing] = useState(false);
   const [closeMsg, setCloseMsg] = useState<string | null>(null);
 
@@ -24,40 +22,35 @@ export default function AdminSession() {
   const [pdfMsg, setPdfMsg] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
 
+  // ✅ Auto cargar passcode guardado por code
   useEffect(() => {
-    let mounted = true;
+    setErr(null);
+    setCloseMsg(null);
+    setPdfMsg(null);
+    setPdfUrl(null);
 
-    supabaseBrowser.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      const s = data.session;
-      setToken(s?.access_token ?? null);
-      setEmail(s?.user?.email ?? null);
-    });
+    const saved = localStorage.getItem(`admin_passcode_${code}`);
+    if (saved) setPasscode(saved);
+  }, [code]);
 
-    const { data: sub } = supabaseBrowser.auth.onAuthStateChange((_evt, session) => {
-      setToken(session?.access_token ?? null);
-      setEmail(session?.user?.email ?? null);
-    });
-
-    return () => {
-      mounted = false;
-      sub.subscription.unsubscribe();
-    };
-  }, []);
+  useEffect(() => {
+    if (!code) return;
+    if (!passcode) return;
+    localStorage.setItem(`admin_passcode_${code}`, passcode);
+  }, [code, passcode]);
 
   async function load() {
     setErr(null);
-    setCloseMsg(null);
 
-    if (!token) {
-      setErr("Debes iniciar sesión.");
+    if (!passcode) {
+      setErr("Ingresa el RUT del relator (clave admin).");
       return;
     }
 
-    const res = await fetch(`/api/admin/attendees?code=${encodeURIComponent(code)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `/api/admin/attendees?code=${encodeURIComponent(code)}&passcode=${encodeURIComponent(passcode)}`,
+      { cache: "no-store" }
+    );
 
     const json = await res.json().catch(() => null);
 
@@ -71,33 +64,30 @@ export default function AdminSession() {
   }
 
   useEffect(() => {
-    if (!token) return;
-
+    if (!passcode) return;
     load();
     const t = setInterval(load, 3000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, code]);
+  }, [passcode, code]);
 
   async function closeSession() {
     setCloseMsg(null);
     setErr(null);
 
-    if (!token) return setCloseMsg("Debes iniciar sesión.");
+    if (!passcode) return setCloseMsg("Falta RUT del relator (clave).");
     if (!sigRef.current || sigRef.current.isEmpty()) return setCloseMsg("Falta firma del relator 👇");
 
     const trainer_signature_data_url = sigRef.current.toPngDataUrl();
     if (!trainer_signature_data_url) return setCloseMsg("No se pudo capturar la firma.");
 
     setClosing(true);
+
     try {
       const res = await fetch("/api/admin/close-session", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ code, trainer_signature_data_url }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passcode, code, trainer_signature_data_url }),
       });
 
       const json = await res.json().catch(() => null);
@@ -110,6 +100,8 @@ export default function AdminSession() {
       setCloseMsg("✅ Charla cerrada con firma del relator.");
       sigRef.current?.clear();
       await load();
+    } catch (e: any) {
+      setCloseMsg(e?.message || "Error cerrando charla");
     } finally {
       setClosing(false);
     }
@@ -120,17 +112,14 @@ export default function AdminSession() {
     setPdfUrl(null);
     setErr(null);
 
-    if (!token) return setPdfMsg("Debes iniciar sesión.");
+    if (!passcode) return setPdfMsg("Falta RUT del relator (clave).");
 
     setPdfLoading(true);
     try {
       const res = await fetch("/api/admin/generate-pdf", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ code }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passcode, code }),
       });
 
       const json = await res.json().catch(() => null);
@@ -144,13 +133,11 @@ export default function AdminSession() {
       setPdfUrl(json?.signed_url || null);
 
       if (json?.signed_url) window.open(json.signed_url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      setPdfMsg(e?.message || "Error generando PDF");
     } finally {
       setPdfLoading(false);
     }
-  }
-
-  async function logout() {
-    await supabaseBrowser.auth.signOut();
   }
 
   const session = data?.session;
@@ -160,40 +147,60 @@ export default function AdminSession() {
 
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: 20, display: "grid", gap: 14 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-        <div>
-          <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>Admin · Asistentes</h1>
-          <div style={{ fontSize: 13, opacity: 0.8 }}>
-            Código: <b>{code}</b>
-          </div>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>
-            Sesión: <b>{email || "—"}</b>
-          </div>
-        </div>
+      <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0 }}>Admin · Asistentes</h1>
+      <div style={{ fontSize: 13, opacity: 0.8 }}>
+        Código: <b>{code}</b>
+      </div>
 
+      <div style={{ display: "flex", gap: 10 }}>
+        <input
+          style={{ flex: 1, border: "1px solid rgba(0,0,0,.15)", borderRadius: 12, padding: "10px 12px" }}
+          placeholder="RUT del relator (clave admin) — ej: 12.345.678-9"
+          value={passcode}
+          onChange={(e) => setPasscode(e.target.value)}
+        />
         <button
-          onClick={logout}
           style={{
             borderRadius: 12,
-            padding: "10px 12px",
-            border: "1px solid rgba(0,0,0,.12)",
-            background: "#fff",
+            padding: "10px 14px",
+            border: "none",
+            background: "#0b1220",
+            color: "#fff",
             fontWeight: 900,
             cursor: "pointer",
           }}
+          onClick={load}
         >
-          Cerrar sesión
+          Cargar
         </button>
       </div>
 
       {err && (
-        <div style={{ padding: "10px 12px", borderRadius: 12, background: "#fff1f1", border: "1px solid #ffd0d0", color: "#9b1c1c", fontWeight: 850 }}>
+        <div
+          style={{
+            padding: "10px 12px",
+            borderRadius: 12,
+            background: "#fff1f1",
+            border: "1px solid #ffd0d0",
+            color: "#9b1c1c",
+            fontWeight: 850,
+          }}
+        >
           {err}
         </div>
       )}
 
       {session && (
-        <div style={{ border: "1px solid rgba(0,0,0,.10)", borderRadius: 14, padding: 12, fontSize: 13, display: "grid", gap: 4 }}>
+        <div
+          style={{
+            border: "1px solid rgba(0,0,0,.10)",
+            borderRadius: 14,
+            padding: 12,
+            fontSize: 13,
+            display: "grid",
+            gap: 4,
+          }}
+        >
           <div><b>Empresa:</b> {session.companies?.name}</div>
           <div><b>Dirección:</b> {session.companies?.address || "-"}</div>
           <div><b>Charla:</b> {session.topic}</div>
@@ -242,7 +249,6 @@ export default function AdminSession() {
             <button
               style={{ flex: 1, minWidth: 160, borderRadius: 12, padding: "10px 12px", border: "1px solid rgba(0,0,0,.12)", background: "#fff", fontWeight: 900, cursor: "pointer" }}
               onClick={() => sigRef.current?.clear()}
-              disabled={closing}
             >
               Limpiar firma
             </button>

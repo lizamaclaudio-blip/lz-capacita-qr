@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { cleanRut, isValidRut } from "@/lib/rut";
 
 export const dynamic = "force-dynamic";
 
@@ -84,9 +85,19 @@ export async function POST(req: NextRequest, ctx?: any) {
 
     const topic = typeof body.topic === "string" ? body.topic.trim() : "";
     const trainer_name = typeof body.trainer_name === "string" ? body.trainer_name.trim() : "";
+    const trainer_rut_raw = typeof body.trainer_rut === "string" ? body.trainer_rut.trim() : "";
 
     if (!topic || !trainer_name) {
       return NextResponse.json({ error: "topic y trainer_name son obligatorios" }, { status: 400 });
+    }
+
+    if (!trainer_rut_raw) {
+      return NextResponse.json({ error: "trainer_rut es obligatorio (RUT del relator)" }, { status: 400 });
+    }
+
+    const trainer_rut = cleanRut(trainer_rut_raw);
+    if (!isValidRut(trainer_rut)) {
+      return NextResponse.json({ error: "RUT del relator inválido" }, { status: 400 });
     }
 
     const location = typeof body.location === "string" ? body.location.trim() : null;
@@ -113,6 +124,7 @@ export async function POST(req: NextRequest, ctx?: any) {
         session_date,
         trainer_name,
         status: "open",
+        admin_passcode: trainer_rut, // ✅ clave admin por charla
       })
       .select("*")
       .single();

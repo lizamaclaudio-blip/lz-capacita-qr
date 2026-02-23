@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { supabaseServer } from "@/lib/supabase/server";
+import { cleanRut, isValidRut } from "@/lib/rut";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import path from "path";
 import { readFile } from "fs/promises";
@@ -11,51 +12,8 @@ import { readFile } from "fs/promises";
 /** Body */
 const BodySchema = z.object({
   code: z.string().min(3),
-  passcode: z.string().optional().nullable(),
+  passcode: z.string().min(3), // RUT del relator (clave)
 });
-
-/** Auth helpers */
-function getBearer(req: NextRequest) {
-  const auth = req.headers.get("authorization") || "";
-  const m = auth.match(/^Bearer\s+(.+)$/i);
-  return m?.[1] || null;
-}
-
-function adminEmails() {
-  return (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-}
-
-async function isAdminByBearer(req: NextRequest) {
-  const token = getBearer(req);
-  if (!token) return false;
-
-  const sb = supabaseServer();
-  const { data, error } = await sb.auth.getUser(token);
-
-  if (error || !data?.user?.email) return false;
-  const email = data.user.email.toLowerCase();
-
-  return adminEmails().includes(email);
-}
-
-async function requireAdmin(req: NextRequest, passcode?: string | null) {
-  // 1) Si viene bearer y es admin -> OK
-  if (await isAdminByBearer(req)) return { ok: true as const };
-
-  // 2) Si no, validamos passcode
-  const pc = String(passcode || "");
-  if (!process.env.ADMIN_PASSCODE) {
-    return { ok: false as const, status: 500, error: "Falta ADMIN_PASSCODE en env" };
-  }
-  if (!pc || pc !== process.env.ADMIN_PASSCODE) {
-    return { ok: false as const, status: 401, error: "Passcode incorrecto" };
-  }
-
-  return { ok: true as const };
-}
 
 /** Storage download */
 async function downloadStorageBytes(pathInBucket: string) {
@@ -71,14 +29,14 @@ function clampText(text: string, max: number) {
   return t.length > max ? t.slice(0, max - 1) + "…" : t;
 }
 
-function normalizeRut(rut: any) {
+function normalizeRutPretty(rut: any) {
   return String(rut ?? "")
     .replace(/[^0-9kK]/g, "")
     .toUpperCase();
 }
 
 function formatRutPretty(rut: any) {
-  const clean = normalizeRut(rut);
+  const clean = normalizeRutPretty(rut);
   if (!clean) return "-";
   if (clean.length === 1) return clean;
 
@@ -153,23 +111,45 @@ export async function POST(req: NextRequest) {
     const parsed = BodySchema.safeParse(json);
     if (!parsed.success) return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
 
-    const auth = await requireAdmin(req, parsed.data.passcode);
-    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
     const code = parsed.data.code.toUpperCase().trim();
+    const passcodeRaw = parsed.data.passcode.trim();
+
     const sb = supabaseServer();
 
-    // 1) Sesión + empresa
+    // 1) Traer sesión + empresa + admin_passcode
     const { data: session, error: sErr } = await sb
       .from("sessions")
       .select(
-        "id, code, topic, location, session_date, trainer_name, status, closed_at, trainer_signature_path, companies(name, address)"
+        "id, code, topic, location, session_date, trainer_name, status, closed_at, trainer_signature_path, admin_passcode, pdf_path, pdf_generated_at, companies(name, address)"
       )
       .eq("code", code)
       .single();
 
     if (sErr || !session) return NextResponse.json({ error: "Charla no existe" }, { status: 404 });
 
+    // 2) Validar passcode (RUT del relator) vs admin_passcode
+    const provided = cleanRut(passcodeRaw);
+    if (!isValidRut(provided)) {
+      return NextResponse.json({ error: "RUT/passcode inválido" }, { status: 400 });
+    }
+
+    const expected = session.admin_passcode ? cleanRut(String(session.admin_passcode)) : null;
+
+    if (expected) {
+      if (provided !== expected) {
+        return NextResponse.json({ error: "RUT/passcode incorrecto" }, { status: 401 });
+      }
+    } else {
+      // Fallback opcional mientras migras (si quieres puedes eliminar esto)
+      if (!process.env.ADMIN_PASSCODE || passcodeRaw !== process.env.ADMIN_PASSCODE) {
+        return NextResponse.json(
+          { error: "Passcode incorrecto (configura sessions.admin_passcode)" },
+          { status: 401 }
+        );
+      }
+    }
+
+    // 3) Debe estar cerrada
     if ((session as any).status !== "closed") {
       return NextResponse.json(
         { error: "Primero debes cerrar la charla con firma del relator." },
@@ -190,7 +170,7 @@ export async function POST(req: NextRequest) {
     const fechaCharla = formatDateFull((session as any).session_date);
     const fechaCierre = formatDateFull((session as any).closed_at);
 
-    // 2) Asistentes
+    // 4) Asistentes
     const { data: attendees, error: aErr } = await sb
       .from("attendees")
       .select("full_name, rut, role, created_at, signature_path")
@@ -199,7 +179,7 @@ export async function POST(req: NextRequest) {
 
     if (aErr) return NextResponse.json({ error: aErr.message }, { status: 500 });
 
-    // 3) PDF
+    // 5) PDF
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -209,7 +189,7 @@ export async function POST(req: NextRequest) {
     const margin = 36;
     const contentW = pageW - margin * 2;
 
-    // ✅ Logo: prueba brand primero (tu archivo real), luego fallback
+    // Logo: brand primero, luego fallback
     let brandLogo: any = null;
     try {
       const logoPathNew = path.join(process.cwd(), "public", "brand", "lz-capacita-qr.png");
@@ -248,7 +228,7 @@ export async function POST(req: NextRequest) {
       });
     };
 
-    // ===== HEADER =====
+    // HEADER
     const headerH = 90;
     const headerBottom = y - headerH;
     drawBox(margin, headerBottom, contentW, headerH, 1);
@@ -294,7 +274,7 @@ export async function POST(req: NextRequest) {
 
     y = headerBottom - 18;
 
-    // ===== TABLA =====
+    // TABLA
     const col = {
       n: 20,
       nombre: 165,
@@ -433,7 +413,7 @@ export async function POST(req: NextRequest) {
       y -= rowH;
     }
 
-    // ===== FIRMA RELATOR =====
+    // FIRMA RELATOR
     ensureSpace(150);
 
     page.drawText("Firma relator:", { x: margin, y: y - 14, size: 11, font: fontBold });
@@ -469,7 +449,7 @@ export async function POST(req: NextRequest) {
     y = relBoxY - 18;
     page.drawText(`Relator: ${(session as any).trainer_name ?? ""}`, { x: margin, y, size: 10, font });
 
-    // ===== Upload PDF y signed url =====
+    // Upload PDF + signed url + update sessions
     const pdfBytes = await pdfDoc.save();
     const pdfPath = `reports/${code}/registro-${Date.now()}.pdf`;
 
@@ -480,7 +460,6 @@ export async function POST(req: NextRequest) {
 
     if (up.error) return NextResponse.json({ error: up.error.message }, { status: 500 });
 
-    // ✅ Guardar en sessions para que aparezca en /app/pdfs
     const nowIso = new Date().toISOString();
     const { error: updErr } = await sb
       .from("sessions")

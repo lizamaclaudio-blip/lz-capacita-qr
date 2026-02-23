@@ -1,68 +1,47 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { z } from "zod";
 import { nanoid } from "nanoid";
 import { supabaseServer } from "@/lib/supabase/server";
+import { cleanRut } from "@/lib/rut";
 
 const BodySchema = z.object({
+  passcode: z.string().min(3),
   code: z.string().min(3),
   trainer_signature_data_url: z.string().min(20),
 });
 
-function getBearer(req: NextRequest) {
-  const auth = req.headers.get("authorization") || "";
-  const m = auth.match(/^Bearer\s+(.+)$/i);
-  return m?.[1] || null;
-}
-
-function adminSet(): Set<string> {
-  return new Set(
-    (process.env.ADMIN_EMAILS || "")
-      .split(",")
-      .map((s) => s.trim().toLowerCase())
-      .filter(Boolean)
-  );
-}
-
-async function requireAdmin(req: NextRequest) {
-  const token = getBearer(req);
-  if (!token) return { ok: false as const, status: 401, error: "Debes iniciar sesión." };
-
-  const admins = adminSet();
-  if (admins.size === 0) return { ok: false as const, status: 500, error: "Falta ADMIN_EMAILS en env." };
-
-  const sb = supabaseServer();
-  const { data, error } = await sb.auth.getUser(token);
-  if (error || !data?.user?.email) return { ok: false as const, status: 401, error: "Sesión inválida." };
-
-  const email = data.user.email.toLowerCase();
-  if (!admins.has(email)) return { ok: false as const, status: 403, error: "No autorizado (email no permitido)." };
-
-  return { ok: true as const, email };
-}
-
-export async function POST(req: NextRequest) {
+export async function POST(req: Request) {
   try {
     const json = await req.json().catch(() => null);
     const parsed = BodySchema.safeParse(json);
     if (!parsed.success) return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
 
-    const auth = await requireAdmin(req);
-    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
     const code = parsed.data.code.toUpperCase().trim();
+    const passcodeRaw = parsed.data.passcode.trim();
+
     const sb = supabaseServer();
 
     const { data: session, error: sErr } = await sb
       .from("sessions")
-      .select("id, status, code")
+      .select("*")
       .eq("code", code)
-      .maybeSingle();
+      .single();
 
-    if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
-    if (!session) return NextResponse.json({ error: "Charla no existe" }, { status: 404 });
+    if (sErr || !session) return NextResponse.json({ error: "Charla no existe" }, { status: 404 });
+
+    const expected = session.admin_passcode ? cleanRut(String(session.admin_passcode)) : null;
+    const provided = cleanRut(passcodeRaw);
+
+    if (expected) {
+      if (provided !== expected) return NextResponse.json({ error: "RUT/passcode incorrecto" }, { status: 401 });
+    } else {
+      if (!process.env.ADMIN_PASSCODE || passcodeRaw !== process.env.ADMIN_PASSCODE) {
+        return NextResponse.json({ error: "Passcode incorrecto (configura sessions.admin_passcode)" }, { status: 401 });
+      }
+    }
 
     const st = String(session.status ?? "").toLowerCase();
     if (st && st !== "open") return NextResponse.json({ error: "Ya está cerrada" }, { status: 409 });
@@ -74,12 +53,12 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(b64, "base64");
     const trainerSigPath = `trainer-signatures/${code}/${Date.now()}-${nanoid(6)}.png`;
 
-    const up = await sb.storage.from("assets").upload(trainerSigPath, buffer, {
+    const upSig = await sb.storage.from("assets").upload(trainerSigPath, buffer, {
       contentType: "image/png",
       upsert: false,
     });
 
-    if (up.error) return NextResponse.json({ error: up.error.message }, { status: 500 });
+    if (upSig.error) return NextResponse.json({ error: upSig.error.message }, { status: 500 });
 
     const { error: closeErr } = await sb
       .from("sessions")

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { QRCodeCanvas } from "qrcode.react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import { cleanRut, isValidRut } from "@/lib/rut";
 import styles from "./page.module.css";
 
 type Company = {
@@ -26,6 +27,7 @@ export default function CreateSessionPage() {
   // form
   const [topic, setTopic] = useState("");
   const [trainerName, setTrainerName] = useState("");
+  const [trainerRut, setTrainerRut] = useState(""); // ✅ nuevo
   const [location, setLocation] = useState("");
   const [sessionDate, setSessionDate] = useState(""); // datetime-local
 
@@ -112,6 +114,10 @@ export default function CreateSessionPage() {
     if (!companyId) return setError("Selecciona una empresa.");
     if (!topic.trim()) return setError("Tema es obligatorio.");
     if (!trainerName.trim()) return setError("Relator es obligatorio.");
+    if (!trainerRut.trim()) return setError("RUT del relator es obligatorio (clave admin).");
+
+    const trainerRutClean = cleanRut(trainerRut);
+    if (!isValidRut(trainerRutClean)) return setError("RUT del relator inválido.");
 
     const token = await getTokenOrRedirect();
     if (!token) return;
@@ -128,6 +134,7 @@ export default function CreateSessionPage() {
         body: JSON.stringify({
           topic: topic.trim(),
           trainer_name: trainerName.trim(),
+          trainer_rut: trainerRutClean, // ✅ nuevo (se guarda como admin_passcode)
           location: location.trim() ? location.trim() : null,
           session_date: sessionDate ? new Date(sessionDate).toISOString() : null,
         }),
@@ -163,6 +170,7 @@ export default function CreateSessionPage() {
       // reset form
       setTopic("");
       setTrainerName("");
+      setTrainerRut("");
       setLocation("");
       setSessionDate("");
     } catch (e: any) {
@@ -194,7 +202,7 @@ export default function CreateSessionPage() {
 
       <div className={styles.card}>
         <div className={styles.cardTitle}>Datos de la charla</div>
-        <div className={styles.cardSub}>Tema y relator obligatorios.</div>
+        <div className={styles.cardSub}>Tema, relator y RUT relator obligatorios.</div>
 
         <div className={styles.form}>
           <div className={styles.field}>
@@ -240,6 +248,17 @@ export default function CreateSessionPage() {
           </div>
 
           <div className={styles.field}>
+            <label className={styles.label}>RUT Relator (clave admin) *</label>
+            <input
+              className={styles.input}
+              value={trainerRut}
+              onChange={(e) => setTrainerRut(e.target.value)}
+              placeholder="Ej: 12.345.678-9"
+            />
+            <div className={styles.hint}>🔐 Este RUT será la clave para cerrar la charla y generar el PDF.</div>
+          </div>
+
+          <div className={styles.field}>
             <label className={styles.label}>Lugar</label>
             <input
               className={styles.input}
@@ -277,7 +296,12 @@ export default function CreateSessionPage() {
 
             <button
               className={styles.copyBtn}
-              onClick={() => copyText(`Código: ${created.code}\nQR: ${created.publicUrl}\nAdmin: ${created.adminUrl}`, "Copiado ✅")}
+              onClick={() =>
+                copyText(
+                  `Código: ${created.code}\nQR: ${created.publicUrl}\nAdmin: ${created.adminUrl}`,
+                  "Copiado ✅"
+                )
+              }
               type="button"
             >
               Copiar todo
