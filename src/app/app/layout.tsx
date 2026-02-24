@@ -4,8 +4,22 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/app/Sidebar";
 import Topbar from "@/components/app/Topbar";
+import RouteTransition from "@/components/app/RouteTransition";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import styles from "./layout.module.css";
+
+function buildGreetingName(user: any) {
+  const md = (user?.user_metadata ?? {}) as Record<string, any>;
+
+  const first = typeof md.first_name === "string" ? md.first_name.trim() : "";
+  const last = typeof md.last_name === "string" ? md.last_name.trim() : "";
+
+  const full =
+    (typeof md.full_name === "string" && md.full_name.trim()) ||
+    (first || last ? `${first} ${last}`.trim() : "");
+
+  return full || null;
+}
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -30,14 +44,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       const em = session.user?.email ?? null;
       setEmail(em);
-
-      // nombre para el saludo: usa metadata si existe, si no usa parte del email
-      const metaName =
-        (session.user as any)?.user_metadata?.full_name ||
-        (session.user as any)?.user_metadata?.name ||
-        null;
-
-      setGreetingName(metaName ? String(metaName) : null);
+      setGreetingName(buildGreetingName(session.user));
 
       setChecking(false);
     })();
@@ -55,11 +62,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const subtitle = useMemo(() => "Panel LZ Capacita QR", []);
 
   if (checking) {
-    return (
-      <div className={styles.loading}>
-        Cargando panel…
-      </div>
-    );
+    return <div className={styles.loading}>Cargando panel…</div>;
   }
 
   return (
@@ -75,7 +78,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         />
 
         <main className={styles.main}>
-          {children}
+          <RouteTransition>{children}</RouteTransition>
         </main>
       </div>
     </div>

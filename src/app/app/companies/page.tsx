@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import EditCompanyModal, { Company } from "@/components/app/EditCompanyModal";
@@ -62,7 +62,6 @@ export default function CompaniesPage() {
   }
 
   function openEdit(company: Company) {
-    // clave: pasar el company completo con id
     setEditingCompany(company);
   }
 
@@ -77,31 +76,45 @@ export default function CompaniesPage() {
 
   return (
     <div className={styles.page}>
-      {error && <div className={styles.error}>{error}</div>}
-
-      <div className={styles.headerRow}>
+      {/* Header */}
+      <div className={`glass ${styles.headerCard}`}>
         <div>
           <div className={styles.title}>Mis empresas</div>
           <div className={styles.sub}>Selecciona una empresa para administrar sus charlas</div>
         </div>
 
-        <button className={styles.primary} onClick={() => router.push("/app/companies/new")}>
+        <button className="btn btnCta" onClick={() => router.push("/app/companies/new")}>
           ➕ Crear empresa
         </button>
       </div>
 
+      {/* Estado */}
+      {error && (
+        <div className={`glass ${styles.stateCard} border border-red-200/70 bg-red-50/60`}>
+          <div className="text-sm font-extrabold text-red-700">{error}</div>
+        </div>
+      )}
+
       {loading ? (
-        <div className={styles.muted}>Cargando…</div>
+        <div className={`glass ${styles.stateCard}`}>
+          <div className="opacity-70 font-extrabold">Cargando…</div>
+        </div>
       ) : !companies.length ? (
-        <div className={styles.muted}>Aún no creas ninguna empresa.</div>
+        <div className={`glass ${styles.stateCard}`}>
+          <div className="opacity-70 font-extrabold">Aún no creas ninguna empresa.</div>
+        </div>
       ) : (
         <div className={styles.gridCompanies}>
-          {companies.map((c) => {
-            const logoUrl = logoPublicUrl((c as any).logo_path ?? null);
+          {companies.map((c: any) => {
+            const logoUrl = logoPublicUrl(c.logo_path ?? null);
             const initial = (c.name?.trim()?.[0] ?? "E").toUpperCase();
 
+            const type: string | null = c.company_type ?? null;
+            const isBranch = type === "branch";
+            const pillText = isBranch ? "📍 Sucursal" : "🏢 Casa matriz";
+
             return (
-              <div key={c.id} className={styles.companyCard}>
+              <div key={c.id} className={`glass ${styles.companyCard}`}>
                 <div className={styles.companyTop}>
                   <div className={styles.companyAvatar}>
                     {logoUrl ? (
@@ -114,26 +127,42 @@ export default function CompaniesPage() {
 
                   <div className={styles.companyInfo}>
                     <div className={styles.companyName}>{c.name}</div>
+
                     <div className={styles.companyMeta}>
-                      {(c as any).address ? `— ${(c as any).address}` : "— Sin dirección"}
+                      {c.legal_name ? `Razón social: ${c.legal_name}` : "Razón social: —"}
                     </div>
+
                     <div className={styles.companyMeta}>
-                      Contacto: {(c as any).contact_name ?? "—"} · {(c as any).contact_email ?? "—"}
+                      {c.rut ? `RUT: ${c.rut}` : "RUT: —"} {c.address ? `· ${c.address}` : ""}
+                    </div>
+
+                    <div className={styles.metaRow}>
+                      <span className={`${styles.pill} ${isBranch ? styles.pillBranch : styles.pillHQ}`}>
+                        {pillText}
+                      </span>
+
+                      {c.contact_name || c.contact_email ? (
+                        <span className={styles.pill}>
+                          👤 {c.contact_name ?? "—"} · {c.contact_email ?? "—"}
+                        </span>
+                      ) : (
+                        <span className={styles.pill}>👤 Contacto: —</span>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 <div className={styles.companyBottom}>
                   <div className={styles.companyCreated}>
-                    Creada: {new Date((c as any).created_at).toLocaleString("es-CL")}
+                    Creada: {c.created_at ? new Date(c.created_at).toLocaleString("es-CL") : "—"}
                   </div>
 
                   <div className={styles.companyActions}>
-                    <button type="button" className={styles.editBtn} onClick={() => openEdit(c)}>
+                    <button type="button" className="btn" onClick={() => openEdit(c)}>
                       Editar
                     </button>
 
-                    <button type="button" className={styles.openBtn} onClick={() => openCompany(c.id)}>
+                    <button type="button" className="btn btnPrimary" onClick={() => openCompany(c.id)}>
                       Abrir →
                     </button>
                   </div>

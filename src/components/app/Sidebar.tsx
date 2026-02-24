@@ -24,54 +24,16 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   const items: NavItem[] = [
-    {
-      href: "/app",
-      label: "Dashboard",
-      icon: <IconHome className={styles.icon} />,
-      match: (p) => p === "/app",
-    },
-    {
-      href: "/app/profile",
-      label: "Mi perfil",
-      icon: <IconUser className={styles.icon} />,
-      match: (p) => p.startsWith("/app/profile"),
-    },
+    { href: "/app", label: "Dashboard", icon: <IconHome className={styles.icon} />, match: (p) => p === "/app" },
+    { href: "/app/profile", label: "Mi perfil", icon: <IconUser className={styles.icon} />, match: (p) => p.startsWith("/app/profile") },
 
-    // ✅ Empresas
-    {
-      href: "/app/companies/new",
-      label: "Crear empresa",
-      icon: <IconPlus className={styles.icon} />,
-      match: (p) => p.startsWith("/app/companies/new"),
-    },
-    {
-      href: "/app/companies",
-      label: "Mis empresas",
-      icon: <IconBuilding className={styles.icon} />,
-      match: (p) => p.startsWith("/app/companies") || p.startsWith("/app/company/"),
-    },
+    { href: "/app/companies/new", label: "Crear empresa", icon: <IconPlus className={styles.icon} />, match: (p) => p.startsWith("/app/companies/new") },
+    { href: "/app/companies", label: "Mis empresas", icon: <IconBuilding className={styles.icon} />, match: (p) => p.startsWith("/app/companies") || p.startsWith("/app/company/") },
 
-    // ✅ Charlas
-    {
-      href: "/app/sessions/new",
-      label: "Crear charla",
-      icon: <IconPlus className={styles.icon} />,
-      match: (p) => p.startsWith("/app/sessions/new"),
-    },
-    {
-      href: "/app/sessions",
-      label: "Mis charlas",
-      icon: <IconList className={styles.icon} />,
-      match: (p) => p.startsWith("/app/sessions"),
-    },
+    { href: "/app/sessions/new", label: "Crear charla", icon: <IconPlus className={styles.icon} />, match: (p) => p.startsWith("/app/sessions/new") },
+    { href: "/app/sessions", label: "Mis charlas", icon: <IconList className={styles.icon} />, match: (p) => p.startsWith("/app/sessions") },
 
-    // ✅ PDFs (v1)
-    {
-      href: "/app/pdfs",
-      label: "Mis PDF",
-      icon: <IconFile className={styles.icon} />,
-      match: (p) => p.startsWith("/app/pdfs"),
-    },
+    { href: "/app/pdfs", label: "Mis PDF", icon: <IconFile className={styles.icon} />, match: (p) => p.startsWith("/app/pdfs") },
   ];
 
   return (
@@ -79,11 +41,7 @@ export default function Sidebar() {
       <div className={styles.brand}>
         <div className={styles.brandLogoWrap}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            className={styles.brandLogo}
-            src="/brand/lz-capacita-qr.png"
-            alt="LZ Capacita QR"
-          />
+          <img className={styles.brandLogo} src="/brand/lz-capacita-qr.png" alt="LZ Capacita QR" />
         </div>
         <div className={styles.brandText}>
           <div className={styles.brandTitle}>LZ Capacita QR</div>
@@ -95,11 +53,7 @@ export default function Sidebar() {
         {items.map((it) => {
           const active = it.match ? it.match(pathname) : pathname === it.href;
           return (
-            <Link
-              key={it.href}
-              href={it.href}
-              className={`${styles.item} ${active ? styles.active : ""}`}
-            >
+            <Link key={it.href} href={it.href} className={`${styles.item} ${active ? styles.active : ""}`}>
               <span className={styles.iconWrap}>{it.icon}</span>
               <span className={styles.label}>{it.label}</span>
             </Link>

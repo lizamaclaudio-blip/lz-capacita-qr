@@ -6,6 +6,16 @@ import styles from "./page.module.css";
 import { SignaturePad, type SignaturePadRef } from "@/components/SignaturePad";
 import { cleanRut, isValidRut } from "@/lib/rut";
 
+type CompanyInfo = {
+  id?: string;
+  name?: string | null;
+  legal_name?: string | null;
+  rut?: string | null;
+  address?: string | null;
+  logo_path?: string | null;
+  company_type?: string | null;
+};
+
 type SessionInfo = {
   id: string;
   code: string;
@@ -15,7 +25,7 @@ type SessionInfo = {
   trainer_name: string | null;
   status: string | null;
   closed_at: string | null;
-  company: { name: string; address: string | null; logo_path?: string | null } | null;
+  company: CompanyInfo | null;
 };
 
 function fmtCL(iso?: string | null) {
@@ -25,6 +35,15 @@ function fmtCL(iso?: string | null) {
   } catch {
     return "—";
   }
+}
+
+function logoPublicUrl(logo_path?: string | null) {
+  if (!logo_path) return null;
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return null;
+
+  const clean = String(logo_path).replace(/^company-logos\//, "");
+  return `${base}/storage/v1/object/public/company-logos/${clean}`;
 }
 
 export default function PublicCheckinPage() {
@@ -42,22 +61,16 @@ export default function PublicCheckinPage() {
 
   const [sending, setSending] = useState(false);
   const [okMsg, setOkMsg] = useState<string | null>(null);
+  const [successMode, setSuccessMode] = useState(false);
 
   const sigRef = useRef<SignaturePadRef | null>(null);
-
-  const companyLogoUrl = useMemo(() => {
-    const p = session?.company?.logo_path ?? null;
-    if (!p) return null;
-    const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    if (!base) return null;
-    const clean = String(p).replace(/^company-logos\//, "");
-    return `${base}/storage/v1/object/public/company-logos/${clean}`;
-  }, [session?.company?.logo_path]);
 
   const isClosed = useMemo(() => {
     const st = (session?.status ?? "").toLowerCase();
     return st === "closed" || !!session?.closed_at;
   }, [session]);
+
+  const companyLogo = useMemo(() => logoPublicUrl(session?.company?.logo_path ?? null), [session]);
 
   async function loadSession() {
     setLoading(true);
@@ -90,12 +103,14 @@ export default function PublicCheckinPage() {
     setError(null);
     setOkMsg(null);
 
-    if (!fullName.trim()) return setError("Ingresa tu nombre.");
-    if (!rut.trim()) return setError("Ingresa tu RUT.");
+    if (isClosed) return setError("Esta charla está cerrada.");
+
+    const nm = fullName.trim();
+    if (!nm) return setError("Ingresa tu nombre.");
 
     const rutClean = cleanRut(rut.trim());
-    if (!isValidRut(rutClean)) return setError("RUT inválido.");
-    if (isClosed) return setError("Esta charla está cerrada.");
+    if (!rutClean) return setError("Ingresa tu RUT.");
+    if (!isValidRut(rutClean)) return setError("RUT inválido (dígito verificador incorrecto).");
 
     if (!sigRef.current || sigRef.current.isEmpty()) {
       return setError("Falta tu firma 👇");
@@ -105,13 +120,14 @@ export default function PublicCheckinPage() {
     if (!signature_data_url) return setError("No se pudo capturar la firma. Intenta de nuevo.");
 
     setSending(true);
+
     try {
       const res = await fetch("/api/public/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           code,
-          full_name: fullName.trim(),
+          full_name: nm,
           rut: rutClean,
           role: role.trim() ? role.trim() : null,
           signature_data_url,
@@ -121,13 +137,20 @@ export default function PublicCheckinPage() {
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || "No se pudo registrar");
 
-      setOkMsg("✅ Registro realizado. ¡Gracias!");
+      // ✅ UX “ventana de gracia”
+      setSuccessMode(true);
+      setOkMsg("✅ Registro realizado. ¡Gracias por asistir! Que tengas un buen día 🙌");
+
       setFullName("");
       setRut("");
       setRole("");
       sigRef.current?.clear();
 
+      // refresca para mostrar conteo/estado actualizado si lo agregas después
       loadSession();
+
+      // se “cierra” visualmente unos segundos
+      window.setTimeout(() => setSuccessMode(false), 4500);
     } catch (e: any) {
       setError(e?.message || "Error");
     } finally {
@@ -137,124 +160,170 @@ export default function PublicCheckinPage() {
 
   return (
     <div className={styles.page}>
-      <div className={styles.card}>
-        <div className={styles.brandRow}>
-          <img className={styles.logo} src="/brand/lz-capacita-qr.png" alt="LZ Capacita QR" />
-          <div>
-            <div className={styles.brandTitle}>LZ Capacita QR</div>
-            <div className={styles.brandSub}>Registro de asistencia</div>
+      <div className={styles.container}>
+        {/* Columna principal */}
+        <div className={`glass ${styles.card}`}>
+          <div className={styles.brandRow}>
+            <div className={styles.brandLogo}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/lz-capacita-qr.png" alt="LZ Capacita QR" />
+            </div>
+            <div className={styles.brandText}>
+              <div className={styles.title}>Registro de asistencia</div>
+              <div className={styles.sub}>LZ Capacita QR · Código {code}</div>
+            </div>
           </div>
+
+          <div className={styles.badges}>
+            <span className={`${styles.pill} ${isClosed ? styles.pillWarn : styles.pillOk}`}>
+              {isClosed ? "🔒 Charla cerrada" : "🟢 Charla abierta"}
+            </span>
+            {session?.topic ? <span className={styles.pill}>🎯 {session.topic}</span> : null}
+          </div>
+
+          {error && <div className={styles.toastErr}>{error}</div>}
+          {okMsg && <div className={styles.toastOk}>{okMsg}</div>}
+
+          {/* Success view */}
+          {successMode ? (
+            <div style={{ marginTop: 14 }}>
+              <div className="glass card">
+                <div style={{ fontWeight: 950, fontSize: 18 }}>¡Gracias! ✅</div>
+                <div style={{ marginTop: 6, opacity: 0.75, fontWeight: 800 }}>
+                  Tu asistencia quedó registrada. Si necesitas corregir datos, habla con el relator.
+                </div>
+                <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button className="btn btnPrimary" type="button" onClick={() => setSuccessMode(false)}>
+                    Registrar otra persona
+                  </button>
+                  <button className="btn" type="button" onClick={() => loadSession()}>
+                    Actualizar
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className={styles.formGrid}>
+                <div className={styles.field}>
+                  <label className={styles.label}>Nombre completo *</label>
+                  <input
+                    className="input"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    placeholder="Ej: Juan Pérez"
+                    disabled={sending || isClosed}
+                  />
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>RUT *</label>
+                  <input
+                    className="input"
+                    value={rut}
+                    onChange={(e) => setRut(e.target.value)}
+                    placeholder="Ej: 12.345.678-9"
+                    disabled={sending || isClosed}
+                  />
+                  <div className={styles.hint}>Se valida dígito verificador.</div>
+                </div>
+
+                <div className={styles.field} style={{ gridColumn: "1 / -1" }}>
+                  <label className={styles.label}>Cargo</label>
+                  <input
+                    className="input"
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    placeholder="Ej: Operador, Supervisor..."
+                    disabled={sending || isClosed}
+                  />
+                </div>
+
+                <div className={styles.field} style={{ gridColumn: "1 / -1" }}>
+                  <label className={styles.label}>Firma *</label>
+
+                  <div
+                    className="glass"
+                    style={{
+                      borderRadius: 18,
+                      overflow: "hidden",
+                      border: "1px solid rgba(15,23,42,.10)",
+                      background: "rgba(255,255,255,.55)",
+                      padding: 10,
+                    }}
+                  >
+                    <SignaturePad ref={sigRef} height={220} />
+                  </div>
+
+                  <div className={styles.actions}>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => sigRef.current?.clear()}
+                      disabled={sending || isClosed}
+                    >
+                      Limpiar firma
+                    </button>
+
+                    <button
+                      type="button"
+                      className="btn btnCta"
+                      onClick={submit}
+                      disabled={sending || isClosed}
+                    >
+                      {sending ? "Enviando…" : "Registrar asistencia"}
+                    </button>
+                  </div>
+
+                  <div className={styles.hint}>Si tienes problemas, recarga la página o vuelve a escanear el QR.</div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
-        {companyLogoUrl && (
-          <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={companyLogoUrl}
-              alt="Logo empresa"
-              style={{ height: 34, width: "auto", borderRadius: 8, background: "rgba(255,255,255,0.6)", padding: 4 }}
-            />
-            <div style={{ fontSize: 12, opacity: 0.8 }}>Empresa</div>
-          </div>
-        )}
+        {/* Columna lateral (info empresa/charla) */}
+        <div className={`glass ${styles.card}`}>
+          <div className={styles.sideTitle}>Detalles de la charla</div>
+          <div className={styles.sideSub}>{loading ? "Cargando…" : "Revisa antes de firmar"}</div>
 
-        <div className={styles.header}>
-          <div className={styles.h1}>Asistencia · {code}</div>
-          <div className={styles.sub}>
-            {loading ? "Cargando charla…" : session?.company?.name ? session.company.name : "—"}
-          </div>
-        </div>
+          <div className={styles.companyBox}>
+            <div className={styles.companyRow}>
+              <div className={styles.companyLogo}>
+                {companyLogo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={companyLogo} alt="Logo empresa" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src="/brand/lz-capacita-qr.png" alt="LZ" style={{ width: "100%", height: "100%", objectFit: "contain", padding: 12, opacity: 0.85 }} />
+                )}
+              </div>
 
-        {error && <div className={styles.error}>{error}</div>}
-        {okMsg && <div className={styles.ok}>{okMsg}</div>}
-
-        {session && (
-          <div className={styles.info}>
-            <div>
-              <b>Charla:</b> {session.topic || "—"}
-            </div>
-            <div>
-              <b>Relator:</b> {session.trainer_name || "—"}
-            </div>
-            <div>
-              <b>Fecha:</b> {fmtCL(session.session_date)}
-            </div>
-            <div>
-              <b>Lugar:</b> {session.location || "—"}
-            </div>
-            <div>
-              <b>Estado:</b>{" "}
-              <span className={`${styles.badge} ${isClosed ? styles.badgeClosed : styles.badgeOpen}`}>
-                {isClosed ? "CERRADA" : "ABIERTA"}
-              </span>
+              <div style={{ minWidth: 0 }}>
+                <div className={styles.companyName}>{session?.company?.name ?? "Empresa"}</div>
+                <div className={styles.companyMeta}>
+                  {session?.company?.legal_name ? `Razón social: ${session.company.legal_name}` : ""}
+                </div>
+                <div className={styles.companyMeta}>
+                  {session?.company?.rut ? `RUT: ${session.company.rut}` : ""}{" "}
+                  {session?.company?.address ? `· ${session.company.address}` : ""}
+                </div>
+                {session?.company?.company_type ? (
+                  <div className={styles.companyMeta}>
+                    {session.company.company_type === "branch" ? "📍 Sucursal" : "🏢 Casa matriz"}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
-        )}
 
-        <div className={styles.form}>
-          <div className={styles.field}>
-            <label className={styles.label}>Nombre completo *</label>
-            <input
-              className={styles.input}
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Ej: Juan Pérez"
-              disabled={sending || isClosed}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.label}>RUT *</label>
-            <input
-              className={styles.input}
-              value={rut}
-              onChange={(e) => setRut(e.target.value)}
-              placeholder="Ej: 12.345.678-9"
-              disabled={sending || isClosed}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.label}>Cargo</label>
-            <input
-              className={styles.input}
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              placeholder="Ej: Operador, Supervisor..."
-              disabled={sending || isClosed}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.label}>Firma *</label>
-
-            <div className={styles.sigWrap}>
-              <SignaturePad ref={sigRef} height={220} />
-            </div>
-
-            <div className={styles.sigActions}>
-              <button
-                type="button"
-                className={styles.secondaryBtn}
-                onClick={() => sigRef.current?.clear()}
-                disabled={sending || isClosed}
-              >
-                Limpiar firma
-              </button>
-
-              <button
-                type="button"
-                className={styles.primaryBtn}
-                onClick={submit}
-                disabled={sending || isClosed}
-              >
-                {sending ? "Enviando…" : "Registrar asistencia"}
-              </button>
-            </div>
+          <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+            <div className={styles.pill}>🎯 Tema: {session?.topic ?? "—"}</div>
+            <div className={styles.pill}>👤 Relator: {session?.trainer_name ?? "—"}</div>
+            <div className={styles.pill}>📍 Lugar: {session?.location ?? "—"}</div>
+            <div className={styles.pill}>🗓️ Fecha: {fmtCL(session?.session_date)}</div>
           </div>
         </div>
-
-        <div className={styles.footer}>Si tienes problemas, recarga la página o vuelve a escanear el QR.</div>
       </div>
     </div>
   );

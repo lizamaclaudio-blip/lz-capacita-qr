@@ -37,7 +37,6 @@ export default function Topbar({
 }: Props) {
   const [now, setNow] = useState<Date>(() => new Date());
 
-  // actualiza cada 30s (suficiente para reloj)
   useEffect(() => {
     const t = window.setInterval(() => setNow(new Date()), 30_000);
     return () => window.clearInterval(t);
@@ -53,14 +52,13 @@ export default function Topbar({
   const dateStr = useMemo(() => formatDateCL(now), [now]);
   const timeStr = useMemo(() => formatTimeCL(now), [now]);
 
-  // ✅ SOLO TU CUENTA ve el botón Owner
   const isOwner = (email ?? "").toLowerCase() === "lizamaclaudio@gmail.com";
 
   return (
     <header className={styles.topbar}>
       <div className={styles.left}>
         <div className={styles.titleRow}>
-          <div className={styles.title}>Hola, bienvenido {name} 👋</div>
+          <div className={styles.title}>Hola, {name} 👋</div>
         </div>
         <div className={styles.subtitle}>{subtitle}</div>
       </div>
@@ -74,12 +72,16 @@ export default function Topbar({
         {email && <div className={styles.email}>{email}</div>}
 
         {isOwner && (
-          <Link href="/owner" className={styles.ownerBtn} title="Panel maestro (dueño)">
+          <Link
+            href="/owner"
+            className={`btn btnPrimary ${styles.ownerBtn}`}
+            title="Panel maestro (dueño)"
+          >
             🛠 Panel Dueño
           </Link>
         )}
 
-        <button type="button" className={styles.logout} onClick={onLogout}>
+        <button type="button" className={`btn ${styles.logoutBtn}`} onClick={onLogout}>
           <IconLogout className={styles.logoutIcon} />
           <span>Salir</span>
         </button>

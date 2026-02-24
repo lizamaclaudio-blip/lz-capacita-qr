@@ -1,5 +1,10 @@
 export function cleanRut(rut: string) {
-  return rut.replace(/\./g, "").replace(/-/g, "").trim().toUpperCase();
+  return String(rut ?? "")
+    .replace(/\./g, "")
+    .replace(/-/g, "")
+    .replace(/\s+/g, "")
+    .trim()
+    .toUpperCase();
 }
 
 export function isValidRut(rut: string) {
@@ -18,4 +23,24 @@ export function isValidRut(rut: string) {
   const mod = 11 - (sum % 11);
   const expected = mod === 11 ? "0" : mod === 10 ? "K" : String(mod);
   return expected === dv;
+}
+
+/**
+ * Formatea a RUT Chile: XXXXXXXX-X (sin puntos).
+ * - Si viene incompleto, devuelve lo que pueda sin romper el input.
+ */
+export function formatRutChile(rut: string) {
+  const r = cleanRut(rut);
+  if (!r) return "";
+  if (r.length === 1) return r;
+
+  const dv = r.slice(-1);
+  const body = r.slice(0, -1);
+
+  return `${body}-${dv}`;
+}
+
+/** Útil para inputs: deja solo dígitos y K/k + . y - (para que el usuario escriba cómodo). */
+export function normalizeRutInput(value: string) {
+  return String(value ?? "").replace(/[^0-9kK\.\-]/g, "");
 }

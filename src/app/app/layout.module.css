@@ -1,38 +1,31 @@
-.shell{
+.shell {
   min-height: 100vh;
-  display:flex;
+  display: flex;
   gap: 12px;
-
-  /* Fondo “calmo + moderno” (menos “verde plano”, más “tech confiable”) */
-  background:
-    radial-gradient(1100px 560px at 18% 0%, rgba(79, 70, 229, 0.12), transparent 62%),
-    radial-gradient(900px 520px at 95% 8%, rgba(20, 184, 166, 0.10), transparent 58%),
-    linear-gradient(180deg, rgba(247,249,255,1) 0%, rgba(240,245,255,1) 100%);
+  background: transparent; /* el fondo lo pone body (globals) */
 }
 
-.content{
+.content {
   flex: 1;
   min-width: 0;
-
   padding: 12px 12px 18px 0;
-  display:flex;
-  flex-direction:column;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-/* ✅ Aquí centramos un poco y limitamos ancho */
-.main{
+.main {
   width: 100%;
   max-width: 1180px;
   margin: 0 auto;
   padding: 2px 6px 18px;
 }
 
-.loading{
+.loading {
   min-height: 100vh;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  opacity:.7;
-  font-weight:900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  font-weight: 900;
 }

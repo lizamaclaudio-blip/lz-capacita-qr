@@ -15,19 +15,11 @@ const BodySchema = z.object({
   passcode: z.string().min(3), // RUT del relator (clave)
 });
 
-/** Storage download */
-async function downloadStorageBytes(pathInBucket: string) {
+/** Storage download (bucket flexible) */
+async function downloadBucketBytes(bucket: string, pathInBucket: string) {
   const sb = supabaseServer();
-  const { data, error } = await sb.storage.from("assets").download(pathInBucket);
-  if (error || !data) throw new Error(error?.message || "No se pudo descargar archivo");
-  const ab = await data.arrayBuffer();
-  return Buffer.from(ab);
-}
-
-async function downloadCompanyLogoBytes(pathInBucket: string) {
-  const sb = supabaseServer();
-  const { data, error } = await sb.storage.from("company-logos").download(pathInBucket);
-  if (error || !data) throw new Error(error?.message || "No se pudo descargar logo empresa");
+  const { data, error } = await sb.storage.from(bucket).download(pathInBucket);
+  if (error || !data) throw new Error(error?.message || `No se pudo descargar archivo (${bucket})`);
   const ab = await data.arrayBuffer();
   return Buffer.from(ab);
 }
@@ -113,6 +105,11 @@ function fitWithEllipsis(str: string, font: any, size: number, maxWidth: number)
   return s.length ? s + ell : ell;
 }
 
+function scaleToFit(w: number, h: number, maxW: number, maxH: number) {
+  const s = Math.min(maxW / w, maxH / h);
+  return { w: w * s, h: h * s };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const json = await req.json().catch(() => null);
@@ -124,11 +121,11 @@ export async function POST(req: NextRequest) {
 
     const sb = supabaseServer();
 
-    // 1) Traer sesión + empresa + admin_passcode
+    // 1) Traer sesión + empresa + admin_passcode + logo_path
     const { data: session, error: sErr } = await sb
       .from("sessions")
       .select(
-        "id, code, topic, location, session_date, trainer_name, status, closed_at, trainer_signature_path, admin_passcode, pdf_path, pdf_generated_at, companies(name, address, logo_path)"
+        "id, code, topic, location, session_date, trainer_name, status, closed_at, trainer_signature_path, admin_passcode, pdf_path, pdf_generated_at, companies(name, legal_name, rut, address, logo_path)"
       )
       .eq("code", code)
       .single();
@@ -141,7 +138,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "RUT/passcode inválido" }, { status: 400 });
     }
 
-    const expected = session.admin_passcode ? cleanRut(String(session.admin_passcode)) : null;
+    const expected = (session as any).admin_passcode ? cleanRut(String((session as any).admin_passcode)) : null;
 
     if (expected) {
       if (provided !== expected) {
@@ -170,8 +167,10 @@ export async function POST(req: NextRequest) {
       : (session as any).companies;
 
     const empresa = company?.name ?? "";
+    const razonSocial = company?.legal_name ?? "";
+    const rutEmpresa = company?.rut ?? "";
     const direccion = company?.address ?? "-";
-    const companyLogoPath = company?.logo_path ? String(company.logo_path) : null;
+    const logoPathRaw = company?.logo_path ?? null;
 
     const tema = (session as any).topic ?? "";
     const lugar = (session as any).location ?? "-";
@@ -198,7 +197,7 @@ export async function POST(req: NextRequest) {
     const margin = 36;
     const contentW = pageW - margin * 2;
 
-    // Logo: brand primero, luego fallback
+    // Logo LZ (brand)
     let brandLogo: any = null;
     try {
       const logoPathNew = path.join(process.cwd(), "public", "brand", "lz-capacita-qr.png");
@@ -212,19 +211,20 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
-    // Logo empresa (si existe)
+    // Logo empresa (desde bucket company-logos)
     let companyLogo: any = null;
-    if (companyLogoPath) {
+    if (logoPathRaw) {
       try {
-        const bytes = await downloadCompanyLogoBytes(companyLogoPath);
-        // Detectar PNG vs JPG
-        if (bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+        const logoPath = String(logoPathRaw).replace(/^company-logos\//, "");
+        const bytes = await downloadBucketBytes("company-logos", logoPath);
+        // intentar png, si no, jpg
+        try {
           companyLogo = await pdfDoc.embedPng(bytes);
-        } else {
+        } catch {
           companyLogo = await pdfDoc.embedJpg(bytes);
         }
       } catch {
-        // si falla, no bloqueamos el PDF
+        companyLogo = null;
       }
     }
 
@@ -254,62 +254,84 @@ export async function POST(req: NextRequest) {
     };
 
     // HEADER
-    const headerH = 90;
+    const headerH = 110;
     const headerBottom = y - headerH;
     drawBox(margin, headerBottom, contentW, headerH, 1);
 
+    // Draw brand logo left
+    let brandW = 0;
     if (brandLogo) {
-      const logoH = 52;
-      const logoW = (brandLogo.width / brandLogo.height) * logoH;
+      const maxH = 52;
+      const maxW = 170;
+      const s = scaleToFit(brandLogo.width, brandLogo.height, maxW, maxH);
+      brandW = s.w;
+
       page.drawImage(brandLogo, {
         x: margin + 12,
-        y: headerBottom + headerH - logoH - 18,
-        width: logoW,
-        height: logoH,
+        y: headerBottom + headerH - s.h - 14,
+        width: s.w,
+        height: s.h,
       });
     }
 
+    // Draw company logo right
+    let compW = 0;
     if (companyLogo) {
-      const logoH = 44;
-      const logoW = (companyLogo.width / companyLogo.height) * logoH;
-      const maxW = 160;
-      const finalW = Math.min(logoW, maxW);
-      const finalH = (finalW / logoW) * logoH;
+      const maxH = 52;
+      const maxW = 170;
+      const s = scaleToFit(companyLogo.width, companyLogo.height, maxW, maxH);
+      compW = s.w;
+
       page.drawImage(companyLogo, {
-        x: margin + contentW - finalW - 12,
-        y: headerBottom + headerH - finalH - 22,
-        width: finalW,
-        height: finalH,
+        x: margin + contentW - 12 - s.w,
+        y: headerBottom + headerH - s.h - 14,
+        width: s.w,
+        height: s.h,
       });
     }
 
     const leftX = margin + 12;
     const rightX = margin + contentW * 0.62;
 
+    // Title line (between logos)
     y = headerBottom + headerH - 22;
-    page.drawText("REGISTRO DE ASISTENCIA – CHARLA", {
-      x: brandLogo ? margin + 12 + 220 : leftX,
+    const title = "REGISTRO DE ASISTENCIA – CHARLA";
+    const titleX = leftX + (brandW ? brandW + 14 : 0);
+    const titleMaxW =
+      margin + contentW - 12 - (compW ? compW + 14 : 0) - titleX;
+    const titleText =
+      titleMaxW > 60 && fontBold.widthOfTextAtSize(title, 14) > titleMaxW
+        ? fitWithEllipsis(title, fontBold, 14, titleMaxW)
+        : title;
+
+    page.drawText(titleText, {
+      x: titleX,
       y,
       size: 14,
       font: fontBold,
       color: rgb(0, 0, 0),
     });
 
-    y -= 20;
+    // Info lines
+    y -= 18;
     page.drawText(`Empresa: ${clampText(empresa, 45)}`, { x: leftX, y, size: 10, font: fontBold });
     page.drawText(`Código: ${(session as any).code}`, { x: rightX, y, size: 10, font: fontBold });
 
-    y -= 14;
-    page.drawText(`Dirección: ${clampText(direccion, 55)}`, { x: leftX, y, size: 10, font });
-    page.drawText(`Fecha charla: ${fechaCharla}`, { x: rightX, y, size: 10, font });
+    y -= 13;
+    page.drawText(`Razón social: ${clampText(razonSocial || "-", 55)}`, { x: leftX, y, size: 9, font });
+    page.drawText(`Fecha charla: ${fechaCharla}`, { x: rightX, y, size: 9, font });
 
-    y -= 14;
-    page.drawText(`Tema: ${clampText(tema, 55)}`, { x: leftX, y, size: 10, font: fontBold });
-    page.drawText(`Cerrada: ${fechaCierre}`, { x: rightX, y, size: 10, font });
+    y -= 13;
+    page.drawText(`RUT empresa: ${formatRutPretty(rutEmpresa)}`, { x: leftX, y, size: 9, font });
+    page.drawText(`Cerrada: ${fechaCierre}`, { x: rightX, y, size: 9, font });
 
-    y -= 14;
-    page.drawText(`Lugar: ${clampText(lugar, 55)}`, { x: leftX, y, size: 10, font });
-    page.drawText(`Relator: ${(session as any).trainer_name ?? ""}`, { x: rightX, y, size: 10, font });
+    y -= 13;
+    page.drawText(`Dirección: ${clampText(direccion, 55)}`, { x: leftX, y, size: 9, font });
+    page.drawText(`Relator: ${(session as any).trainer_name ?? ""}`, { x: rightX, y, size: 9, font });
+
+    y -= 13;
+    page.drawText(`Tema: ${clampText(tema, 55)}`, { x: leftX, y, size: 9, font: fontBold });
+    page.drawText(`Lugar: ${clampText(lugar, 45)}`, { x: rightX, y, size: 9, font });
 
     y = headerBottom - 18;
 
@@ -432,7 +454,7 @@ export async function POST(req: NextRequest) {
 
       try {
         if (!a.signature_path) throw new Error("no signature");
-        const imgBytes = await downloadStorageBytes(a.signature_path);
+        const imgBytes = await downloadBucketBytes("assets", a.signature_path);
         const png = await pdfDoc.embedPng(imgBytes);
 
         const scale = Math.min(sigAreaW / png.width, sigAreaH / png.height);
@@ -467,7 +489,7 @@ export async function POST(req: NextRequest) {
 
     if ((session as any).trainer_signature_path) {
       try {
-        const imgBytes = await downloadStorageBytes((session as any).trainer_signature_path);
+        const imgBytes = await downloadBucketBytes("assets", (session as any).trainer_signature_path);
         const png = await pdfDoc.embedPng(imgBytes);
 
         const scale = Math.min(relBoxW / png.width, relBoxH / png.height);

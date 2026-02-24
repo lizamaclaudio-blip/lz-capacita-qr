@@ -4,6 +4,19 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
+async function fetchSession(sb: any, code: string, full: boolean) {
+  const selectFull =
+    "id, code, topic, location, session_date, trainer_name, status, closed_at, companies(id,name,legal_name,rut,address,logo_path,company_type,parent_company_id)";
+  const selectLite =
+    "id, code, topic, location, session_date, trainer_name, status, closed_at, companies(id,name,address)";
+
+  return sb
+    .from("sessions")
+    .select(full ? selectFull : selectLite)
+    .ilike("code", code) // ✅ case-insensitive exact match
+    .single();
+}
+
 export async function GET(req: NextRequest) {
   try {
     const code = (req.nextUrl.searchParams.get("code") || "").trim().toUpperCase();
@@ -11,13 +24,15 @@ export async function GET(req: NextRequest) {
 
     const sb = supabaseServer();
 
-    const { data: session, error } = await sb
-      .from("sessions")
-      .select(
-        "id, code, topic, location, session_date, trainer_name, status, closed_at, companies(name,address,logo_path)"
-      )
-      .ilike("code", code) // ✅ case-insensitive exact match
-      .single();
+    // 1) Intento completo (incluye logo_path + legal_name + rut + company_type)
+    let { data: session, error } = await fetchSession(sb, code, true);
+
+    // 2) Si falla por columnas faltantes, reintento “lite”
+    if (error && /Could not find the '.*' column/i.test(error.message)) {
+      const retry = await fetchSession(sb, code, false);
+      session = retry.data as any;
+      error = retry.error as any;
+    }
 
     if (error || !session) return NextResponse.json({ error: "Charla no existe" }, { status: 404 });
 
@@ -35,7 +50,7 @@ export async function GET(req: NextRequest) {
         trainer_name: session.trainer_name,
         status: session.status,
         closed_at: session.closed_at,
-        company,
+        company: company ?? null,
       },
     });
   } catch (e: any) {
