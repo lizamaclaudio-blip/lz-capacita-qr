@@ -13,7 +13,6 @@ type CompanyInfo = {
   rut?: string | null;
   address?: string | null;
   logo_path?: string | null;
-  company_type?: string | null;
 };
 
 type SessionInfo = {
@@ -27,15 +26,6 @@ type SessionInfo = {
   closed_at: string | null;
   company: CompanyInfo | null;
 };
-
-function fmtCL(iso?: string | null) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString("es-CL");
-  } catch {
-    return "—";
-  }
-}
 
 function logoPublicUrl(logo_path?: string | null) {
   if (!logo_path) return null;
@@ -61,7 +51,12 @@ export default function PublicCheckinPage() {
 
   const [sending, setSending] = useState(false);
   const [okMsg, setOkMsg] = useState<string | null>(null);
-  const [successMode, setSuccessMode] = useState(false);
+
+  // "form" -> formulario
+  // "success" -> ventana 5 segundos
+  // "done" -> pantalla final sin formulario
+  const [mode, setMode] = useState<"form" | "success" | "done">("form");
+  const [countdown, setCountdown] = useState(5);
 
   const sigRef = useRef<SignaturePadRef | null>(null);
 
@@ -99,11 +94,36 @@ export default function PublicCheckinPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
+  // Countdown + transición a pantalla final
+  useEffect(() => {
+    if (mode !== "success") return;
+
+    setCountdown(5);
+
+    const i = window.setInterval(() => {
+      setCountdown((c) => (c <= 1 ? 1 : c - 1));
+    }, 1000);
+
+    const t = window.setTimeout(() => {
+      setMode("done");
+      // Intento cerrar (solo funciona si la ventana fue abierta por script)
+      try {
+        window.close();
+      } catch {}
+    }, 5000);
+
+    return () => {
+      window.clearInterval(i);
+      window.clearTimeout(t);
+    };
+  }, [mode]);
+
   async function submit() {
     setError(null);
     setOkMsg(null);
 
     if (isClosed) return setError("Esta charla está cerrada.");
+    if (mode !== "form") return;
 
     const nm = fullName.trim();
     if (!nm) return setError("Ingresa tu nombre.");
@@ -135,22 +155,26 @@ export default function PublicCheckinPage() {
       });
 
       const json = await res.json().catch(() => null);
+
+      // Si ya estaba registrado (409), lo dejamos igual “final”
+      if (res.status === 409) {
+        setMode("done");
+        setOkMsg("✅ Este RUT ya estaba registrado en esta charla.");
+        return;
+      }
+
       if (!res.ok) throw new Error(json?.error || "No se pudo registrar");
 
-      // ✅ UX “ventana de gracia”
-      setSuccessMode(true);
-      setOkMsg("✅ Registro realizado. ¡Gracias por asistir! Que tengas un buen día 🙌");
+      setOkMsg("✅ Registro realizado. ¡Gracias por asistir! 🙌");
+      setMode("success");
 
+      // Limpia formulario (aunque ya no se mostrará)
       setFullName("");
       setRut("");
       setRole("");
       sigRef.current?.clear();
 
-      // refresca para mostrar conteo/estado actualizado si lo agregas después
       loadSession();
-
-      // se “cierra” visualmente unos segundos
-      window.setTimeout(() => setSuccessMode(false), 4500);
     } catch (e: any) {
       setError(e?.message || "Error");
     } finally {
@@ -161,7 +185,6 @@ export default function PublicCheckinPage() {
   return (
     <div className={styles.page}>
       <div className={styles.container}>
-        {/* Columna principal */}
         <div className={`glass ${styles.card}`}>
           <div className={styles.brandRow}>
             <div className={styles.brandLogo}>
@@ -184,18 +207,26 @@ export default function PublicCheckinPage() {
           {error && <div className={styles.toastErr}>{error}</div>}
           {okMsg && <div className={styles.toastOk}>{okMsg}</div>}
 
-          {/* Success view */}
-          {successMode ? (
+          {mode === "success" ? (
             <div style={{ marginTop: 14 }}>
               <div className="glass card">
-                <div style={{ fontWeight: 950, fontSize: 18 }}>¡Gracias! ✅</div>
+                <div style={{ fontWeight: 950, fontSize: 18 }}>Registro exitoso ✅</div>
                 <div style={{ marginTop: 6, opacity: 0.75, fontWeight: 800 }}>
-                  Tu asistencia quedó registrada. Si necesitas corregir datos, habla con el relator.
+                  Esta ventana se cerrará / finalizará en <b>{countdown}</b> segundo(s).
+                </div>
+                <div style={{ marginTop: 10, opacity: 0.7, fontWeight: 800 }}>
+                  (Si no se cierra automático, puedes cerrarla manualmente.)
+                </div>
+              </div>
+            </div>
+          ) : mode === "done" ? (
+            <div style={{ marginTop: 14 }}>
+              <div className="glass card">
+                <div style={{ fontWeight: 950, fontSize: 18 }}>¡Listo! ✅</div>
+                <div style={{ marginTop: 6, opacity: 0.75, fontWeight: 800 }}>
+                  Tu asistencia quedó registrada. Ya no es posible volver a inscribirse desde esta pantalla.
                 </div>
                 <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button className="btn btnPrimary" type="button" onClick={() => setSuccessMode(false)}>
-                    Registrar otra persona
-                  </button>
                   <button className="btn" type="button" onClick={() => loadSession()}>
                     Actualizar
                   </button>
@@ -256,73 +287,67 @@ export default function PublicCheckinPage() {
                   </div>
 
                   <div className={styles.actions}>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={() => sigRef.current?.clear()}
-                      disabled={sending || isClosed}
-                    >
+                    <button type="button" className="btn" onClick={() => sigRef.current?.clear()} disabled={sending}>
                       Limpiar firma
                     </button>
 
-                    <button
-                      type="button"
-                      className="btn btnCta"
-                      onClick={submit}
-                      disabled={sending || isClosed}
-                    >
-                      {sending ? "Enviando…" : "Registrar asistencia"}
+                    <button type="button" className="btn btnPrimary" onClick={submit} disabled={sending || isClosed}>
+                      {isClosed ? "Charla cerrada" : sending ? "Registrando..." : "Registrar asistencia"}
                     </button>
                   </div>
-
-                  <div className={styles.hint}>Si tienes problemas, recarga la página o vuelve a escanear el QR.</div>
                 </div>
               </div>
             </>
           )}
         </div>
 
-        {/* Columna lateral (info empresa/charla) */}
-        <div className={`glass ${styles.card}`}>
-          <div className={styles.sideTitle}>Detalles de la charla</div>
-          <div className={styles.sideSub}>{loading ? "Cargando…" : "Revisa antes de firmar"}</div>
+        {/* Columna empresa */}
+        <div className={`glass ${styles.sideCard}`}>
+          <div className={styles.sideTitle}>Empresa</div>
 
-          <div className={styles.companyBox}>
-            <div className={styles.companyRow}>
-              <div className={styles.companyLogo}>
-                {companyLogo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={companyLogo} alt="Logo empresa" />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src="/brand/lz-capacita-qr.png" alt="LZ" style={{ width: "100%", height: "100%", objectFit: "contain", padding: 12, opacity: 0.85 }} />
-                )}
+          <div className={styles.sideCompany}>
+            <div className={styles.sideLogo}>
+              {companyLogo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={companyLogo} alt="Logo empresa" />
+              ) : (
+                <div className={styles.sideLogoFallback}>🏢</div>
+              )}
+            </div>
+
+            <div>
+              <div className={styles.sideCompanyName}>{session?.company?.name ?? "—"}</div>
+              <div className={styles.sideMeta}>
+                {session?.company?.rut ? `RUT: ${session.company.rut}` : "RUT: —"}
               </div>
-
-              <div style={{ minWidth: 0 }}>
-                <div className={styles.companyName}>{session?.company?.name ?? "Empresa"}</div>
-                <div className={styles.companyMeta}>
-                  {session?.company?.legal_name ? `Razón social: ${session.company.legal_name}` : ""}
-                </div>
-                <div className={styles.companyMeta}>
-                  {session?.company?.rut ? `RUT: ${session.company.rut}` : ""}{" "}
-                  {session?.company?.address ? `· ${session.company.address}` : ""}
-                </div>
-                {session?.company?.company_type ? (
-                  <div className={styles.companyMeta}>
-                    {session.company.company_type === "branch" ? "📍 Sucursal" : "🏢 Casa matriz"}
-                  </div>
-                ) : null}
+              <div className={styles.sideMeta}>
+                {session?.company?.address ? session.company.address : "—"}
               </div>
             </div>
           </div>
 
-          <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-            <div className={styles.pill}>🎯 Tema: {session?.topic ?? "—"}</div>
-            <div className={styles.pill}>👤 Relator: {session?.trainer_name ?? "—"}</div>
-            <div className={styles.pill}>📍 Lugar: {session?.location ?? "—"}</div>
-            <div className={styles.pill}>🗓️ Fecha: {fmtCL(session?.session_date)}</div>
+          <div className={styles.sideTitle} style={{ marginTop: 12 }}>
+            Charla
           </div>
+
+          <div className={styles.sideMetaRow}>
+            <div className={styles.sideMetaLabel}>Tema</div>
+            <div className={styles.sideMetaValue}>{session?.topic ?? "—"}</div>
+          </div>
+
+          <div className={styles.sideMetaRow}>
+            <div className={styles.sideMetaLabel}>Relator</div>
+            <div className={styles.sideMetaValue}>{session?.trainer_name ?? "—"}</div>
+          </div>
+
+          <div className={styles.sideMetaRow}>
+            <div className={styles.sideMetaLabel}>Lugar</div>
+            <div className={styles.sideMetaValue}>{session?.location ?? "—"}</div>
+          </div>
+
+          {loading ? (
+            <div style={{ marginTop: 10, opacity: 0.7, fontWeight: 800 }}>Cargando…</div>
+          ) : null}
         </div>
       </div>
     </div>

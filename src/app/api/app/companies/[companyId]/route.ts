@@ -4,217 +4,143 @@ import { cleanRut, isValidRut } from "@/lib/rut";
 
 export const dynamic = "force-dynamic";
 
-function getToken(req: NextRequest) {
+function getBearerToken(req: NextRequest) {
   const auth = req.headers.get("authorization") || "";
   const m = auth.match(/^Bearer\s+(.+)$/i);
-  return m?.[1] || null;
+  return m?.[1] ?? null;
 }
 
 function sbAuthed(token: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   return createClient(url, anon, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false },
+    global: { headers: { Authorization: `Bearer ${token}` } },
   });
 }
 
-async function requireUser(req: NextRequest) {
-  const token = getToken(req);
-  if (!token) {
-    return { ok: false as const, status: 401, error: "Missing bearer token" };
-  }
+function bad(msg: string, status = 400) {
+  return NextResponse.json({ error: msg }, { status });
+}
+
+type CompanyUpdateBody = {
+  name?: string | null;
+  rut?: string | null;
+  legal_name?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  region?: string | null;
+  comuna?: string | null;
+  city?: string | null;
+  company_type?: "hq" | "branch" | string | null;
+  parent_company_id?: string | null;
+  logo_path?: string | null;
+};
+
+export async function GET(req: NextRequest, ctx: any) {
+  const companyId = String((await ctx?.params)?.companyId ?? ctx?.params?.companyId ?? "").trim();
+
+  const token = getBearerToken(req);
+  if (!token) return bad("Missing bearer token", 401);
 
   const supabase = sbAuthed(token);
-  const { data: u, error: uerr } = await supabase.auth.getUser();
-
-  if (uerr || !u?.user) {
-    return { ok: false as const, status: 401, error: "Unauthorized" };
-  }
-
-  return { ok: true as const, supabase, user: u.user };
-}
-
-function missingColumnHint(msg: string) {
-  const m = msg.match(/Could not find the '([^']+)' column/i);
-  const col = m?.[1];
-  if (!col) return null;
-
-  const base =
-    "⚠️ Tu tabla `companies` no tiene la columna requerida para esta versión.\n" +
-    "Ejecuta esta migración en Supabase (SQL Editor):\n\n" +
-    "alter table public.companies\n" +
-    "  add column if not exists legal_name text,\n" +
-    "  add column if not exists company_type text default 'hq',\n" +
-    "  add column if not exists parent_company_id uuid null references public.companies(id);\n";
-
-  return { col, message: `${base}\nColumna faltante: ${col}` };
-}
-
-async function assertParentBelongsToUser(supabase: any, ownerId: string, parentId: string, selfId: string) {
-  if (parentId === selfId) {
-    return { ok: false as const, error: "Una empresa no puede ser su propia casa matriz." };
-  }
+  const { data: u, error: uErr } = await supabase.auth.getUser();
+  if (uErr || !u?.user) return bad("Unauthorized", 401);
 
   const { data, error } = await supabase
     .from("companies")
-    .select("id, owner_id, company_type")
-    .eq("id", parentId)
-    .eq("owner_id", ownerId)
+    .select("*")
+    .eq("id", companyId)
+    .eq("owner_id", u.user.id)
     .maybeSingle();
 
-  if (error) return { ok: false as const, error: error.message };
-  if (!data) return { ok: false as const, error: "Casa matriz no encontrada o no pertenece a tu usuario." };
+  if (error) return bad(error.message, 400);
+  if (!data) return bad("Company not found", 404);
 
-  if (data.company_type && data.company_type === "branch") {
-    return { ok: false as const, error: "La casa matriz seleccionada no puede ser una sucursal." };
-  }
-
-  return { ok: true as const };
+  return NextResponse.json({ company: data });
 }
 
-export async function GET(req: NextRequest, ctx: { params: { companyId: string } }) {
-  try {
-    const auth = await requireUser(req);
-    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+export async function PUT(req: NextRequest, ctx: any) {
+  const companyId = String((await ctx?.params)?.companyId ?? ctx?.params?.companyId ?? "").trim();
 
-    const companyId = ctx.params.companyId;
+  const token = getBearerToken(req);
+  if (!token) return bad("Missing bearer token", 401);
 
-    const { data, error } = await auth.supabase
-      .from("companies")
-      .select("*")
-      .eq("id", companyId)
-      .eq("owner_id", auth.user.id)
-      .maybeSingle();
+  const supabase = sbAuthed(token);
+  const { data: u, error: uErr } = await supabase.auth.getUser();
+  if (uErr || !u?.user) return bad("Unauthorized", 401);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-    if (!data) return NextResponse.json({ error: "Empresa no encontrada" }, { status: 404 });
+  const body = (await req.json().catch(() => null)) as CompanyUpdateBody | null;
+  if (!body) return bad("Invalid JSON body");
 
-    return NextResponse.json({ company: data });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
+  const patch: Record<string, any> = {};
+
+  if ("name" in body) {
+    const name = (body.name ?? "").toString().trim();
+    if (!name) return bad("name is required");
+    patch.name = name;
   }
+
+  if ("rut" in body) {
+    const raw = (body.rut ?? "").toString().trim();
+    if (!raw) {
+      patch.rut = null;
+    } else {
+      const r = cleanRut(raw);
+      if (!isValidRut(r)) return bad("RUT inválido");
+      patch.rut = r;
+    }
+  }
+
+  if ("legal_name" in body) patch.legal_name = (body.legal_name ?? "").toString().trim() || null;
+  if ("address" in body) patch.address = (body.address ?? "").toString().trim() || null;
+  if ("phone" in body) patch.phone = (body.phone ?? "").toString().trim() || null;
+  if ("region" in body) patch.region = (body.region ?? "").toString().trim() || null;
+  if ("comuna" in body) patch.comuna = (body.comuna ?? "").toString().trim() || null;
+  if ("city" in body) patch.city = (body.city ?? "").toString().trim() || null;
+
+  if ("company_type" in body) {
+    const ct = (body.company_type ?? "").toString().trim();
+    if (!ct) patch.company_type = null;
+    else if (ct !== "hq" && ct !== "branch") return bad("company_type inválido (use 'hq' o 'branch')");
+    else patch.company_type = ct;
+  }
+
+  if ("parent_company_id" in body) patch.parent_company_id = (body.parent_company_id ?? "").toString().trim() || null;
+  if ("logo_path" in body) patch.logo_path = (body.logo_path ?? "").toString().trim() || null;
+
+  if (!Object.keys(patch).length) return bad("Nothing to update");
+
+  const { data, error } = await supabase
+    .from("companies")
+    .update(patch)
+    .eq("id", companyId)
+    .eq("owner_id", u.user.id)
+    .select("*")
+    .maybeSingle();
+
+  if (error) return bad(error.message, 400);
+  if (!data) return bad("Company not found", 404);
+
+  return NextResponse.json({ company: data });
 }
 
-export async function PATCH(req: NextRequest, ctx: { params: { companyId: string } }) {
-  try {
-    const auth = await requireUser(req);
-    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+export async function DELETE(req: NextRequest, ctx: any) {
+  const companyId = String((await ctx?.params)?.companyId ?? ctx?.params?.companyId ?? "").trim();
 
-    const companyId = ctx.params.companyId;
-    const body = await req.json().catch(() => ({}));
+  const token = getBearerToken(req);
+  if (!token) return bad("Missing bearer token", 401);
 
-    // ✅ Requeridos (tu modal envía todo, así que lo validamos fuerte)
-    const name = typeof body.name === "string" ? body.name.trim() : "";
-    const legal_name = typeof body.legal_name === "string" ? body.legal_name.trim() : "";
-    const address = typeof body.address === "string" ? body.address.trim() : "";
-    const rutRaw = typeof body.rut === "string" ? body.rut.trim() : "";
+  const supabase = sbAuthed(token);
+  const { data: u, error: uErr } = await supabase.auth.getUser();
+  if (uErr || !u?.user) return bad("Unauthorized", 401);
 
-    if (!name) return NextResponse.json({ error: "Nombre comercial es obligatorio" }, { status: 400 });
-    if (!legal_name) return NextResponse.json({ error: "Razón social es obligatoria" }, { status: 400 });
-    if (!address) return NextResponse.json({ error: "Dirección empresa es obligatoria" }, { status: 400 });
+  const { error } = await supabase
+    .from("companies")
+    .delete()
+    .eq("id", companyId)
+    .eq("owner_id", u.user.id);
 
-    const rut = cleanRut(rutRaw);
-    if (!rut) return NextResponse.json({ error: "RUT empresa es obligatorio" }, { status: 400 });
-    if (!isValidRut(rut))
-      return NextResponse.json({ error: "RUT empresa inválido (dígito verificador incorrecto)" }, { status: 400 });
-
-    // ✅ Tipo empresa (hq / branch)
-    const company_type = body.company_type === "branch" ? "branch" : "hq";
-    const parent_company_id =
-      company_type === "branch" && typeof body.parent_company_id === "string" && body.parent_company_id.trim()
-        ? body.parent_company_id.trim()
-        : null;
-
-    if (company_type === "branch" && !parent_company_id) {
-      return NextResponse.json({ error: "Sucursal requiere seleccionar la casa matriz" }, { status: 400 });
-    }
-
-    if (company_type === "branch" && parent_company_id) {
-      const okParent = await assertParentBelongsToUser(auth.supabase, auth.user.id, parent_company_id, companyId);
-      if (!okParent.ok) return NextResponse.json({ error: okParent.error }, { status: 400 });
-    }
-
-    // ✅ Contacto (opcional)
-    const contact_name =
-      typeof body.contact_name === "string" && body.contact_name.trim() ? body.contact_name.trim() : null;
-
-    const contact_rut_raw =
-      typeof body.contact_rut === "string" && body.contact_rut.trim() ? body.contact_rut.trim() : null;
-
-    const contact_rut = contact_rut_raw ? cleanRut(contact_rut_raw) : null;
-    if (contact_rut && !isValidRut(contact_rut)) {
-      return NextResponse.json({ error: "RUT contacto inválido" }, { status: 400 });
-    }
-
-    const contact_email =
-      typeof body.contact_email === "string" && body.contact_email.trim() ? body.contact_email.trim() : null;
-
-    const contact_phone =
-      typeof body.contact_phone === "string" && body.contact_phone.trim() ? body.contact_phone.trim() : null;
-
-    // ✅ Logo (opcional)
-    const logo_path =
-      typeof body.logo_path === "string" && body.logo_path.trim()
-        ? body.logo_path.replace(/^company-logos\//, "")
-        : undefined; // undefined => no lo toca
-
-    const payload: any = {
-      name,
-      legal_name,
-      rut,
-      address,
-
-      company_type,
-      parent_company_id,
-
-      contact_name,
-      contact_rut,
-      contact_email,
-      contact_phone,
-    };
-
-    if (typeof logo_path === "string") payload.logo_path = logo_path;
-
-    const { data, error } = await auth.supabase
-      .from("companies")
-      .update(payload)
-      .eq("id", companyId)
-      .eq("owner_id", auth.user.id)
-      .select("*")
-      .maybeSingle();
-
-    if (error) {
-      const hint = missingColumnHint(error.message);
-      if (hint) return NextResponse.json({ error: hint.message }, { status: 400 });
-      return NextResponse.json({ error: error.message }, { status: 400 });
-    }
-
-    if (!data) return NextResponse.json({ error: "Empresa no encontrada" }, { status: 404 });
-
-    return NextResponse.json({ company: data });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
-  }
-}
-
-export async function DELETE(req: NextRequest, ctx: { params: { companyId: string } }) {
-  try {
-    const auth = await requireUser(req);
-    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
-    const companyId = ctx.params.companyId;
-
-    const { error } = await auth.supabase
-      .from("companies")
-      .delete()
-      .eq("id", companyId)
-      .eq("owner_id", auth.user.id);
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 });
-
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
-  }
+  if (error) return bad(error.message, 400);
+  return NextResponse.json({ ok: true });
 }

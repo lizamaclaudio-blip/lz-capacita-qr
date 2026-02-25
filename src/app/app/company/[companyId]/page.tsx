@@ -3,15 +3,31 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import { formatRutChile } from "@/lib/rut";
 import styles from "./page.module.css";
 
 type Company = {
   id: string;
   name: string;
-  address: string | null;
+  legal_name?: string | null;
   rut?: string | null;
+  address?: string | null;
   logo_path?: string | null;
-  created_at: string;
+  company_type?: string | null;
+  created_at?: string | null;
+};
+
+type Kpis = {
+  sessions_total: number;
+  workers_unique: number;
+  attendances_total: number;
+};
+
+type WorkerRow = {
+  rut: string;
+  full_name: string | null;
+  role: string | null;
+  last_seen_at: string;
 };
 
 type SessionRow = {
@@ -25,66 +41,64 @@ type SessionRow = {
   status: string | null;
   closed_at: string | null;
   created_at: string | null;
+  pdf_path?: string | null;
+  pdf_generated_at?: string | null;
 };
 
-type JustCreated = {
-  code: string;
-  topic: string;
-  adminUrl: string;
-  publicUrl: string;
-};
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function fmtDateTimeCL(iso: string | null | undefined) {
-  if (!iso) return "Sin fecha";
+function isUuid(v: string) {
+  return UUID_RE.test(v);
+}
+
+function safeUpper(s: string | null | undefined) {
+  return String(s ?? "").trim().toUpperCase();
+}
+
+function fmtCL(iso: string | null | undefined) {
+  if (!iso) return "—";
   try {
     return new Date(iso).toLocaleString("es-CL");
   } catch {
-    return "Sin fecha";
+    return "—";
   }
 }
 
-function safeUpper(s: string) {
-  return (s ?? "").toUpperCase();
-}
-
-export default function CompanyPage() {
+export default function CompanyDetailPage() {
   const router = useRouter();
   const params = useParams<{ companyId: string }>();
-  const companyId = (params?.companyId ?? "") as string;
+
+  const raw = (params?.companyId ?? "") as unknown as string | string[];
+  const companyId = (Array.isArray(raw) ? raw[0] : raw).trim();
+
+  const invalidCompanyId =
+    !companyId || companyId === "undefined" || companyId === "null" || !isUuid(companyId);
 
   const [loading, setLoading] = useState(true);
-  const [company, setCompany] = useState<Company | null>(null);
-  const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  // form
-  const [topic, setTopic] = useState("");
-  const [location, setLocation] = useState("");
-  const [trainerName, setTrainerName] = useState("");
-  const [sessionDate, setSessionDate] = useState(""); // datetime-local
-  const [creating, setCreating] = useState(false);
+  const [company, setCompany] = useState<Company | null>(null);
+  const [kpis, setKpis] = useState<Kpis | null>(null);
+  const [workers, setWorkers] = useState<WorkerRow[]>([]);
+  const [sessions, setSessions] = useState<SessionRow[]>([]);
 
-  // post-create card
-  const [justCreated, setJustCreated] = useState<JustCreated | null>(null);
+  const [qWorkers, setQWorkers] = useState("");
+  const [qSessions, setQSessions] = useState("");
+  const [showAllWorkers, setShowAllWorkers] = useState(false);
+  const [showAllSessions, setShowAllSessions] = useState(false);
 
-  // search in sessions list
-  const [q, setQ] = useState("");
-
-  // auto open qr toggle
-  const [autoOpenQr, setAutoOpenQr] = useState(false);
-
-  // cache token en memoria (evita “rebotes”)
   const [token, setToken] = useState<string | null>(null);
   const tokenRef = useRef<string | null>(null);
 
-  const baseUrl = useMemo(() => {
+  const origin = useMemo(() => {
     if (typeof window === "undefined") return "";
     return window.location.origin;
   }, []);
 
   const companyLogoUrl = useMemo(() => {
-    const p = (company as any)?.logo_path ?? null;
+    const p = company?.logo_path ?? null;
     if (!p) return null;
     const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
     if (!base) return null;
@@ -92,31 +106,29 @@ export default function CompanyPage() {
     return `${base}/storage/v1/object/public/company-logos/${clean}`;
   }, [company]);
 
-  // Persist toggle (localStorage)
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem("lz_auto_open_qr");
-      if (raw === "1") setAutoOpenQr(true);
-      if (raw === "0") setAutoOpenQr(false);
-    } catch {}
-  }, []);
+    if (!companyId) return;
+    if (!invalidCompanyId) return;
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem("lz_auto_open_qr", autoOpenQr ? "1" : "0");
-    } catch {}
-  }, [autoOpenQr]);
+    setError("Empresa inválida. Volviendo a Mis empresas…");
+    setCompany(null);
+    setKpis(null);
+    setWorkers([]);
+    setSessions([]);
+    setLoading(false);
 
-  // Mantener token estable
+    const t = window.setTimeout(() => {
+      router.replace("/app/companies");
+    }, 700);
+    return () => window.clearTimeout(t);
+  }, [companyId, invalidCompanyId, router]);
+
   useEffect(() => {
     let alive = true;
 
     async function boot() {
       const { data } = await supabaseBrowser.auth.getSession();
       const t = data.session?.access_token ?? null;
-
       if (!alive) return;
 
       if (!t) {
@@ -182,9 +194,8 @@ export default function CompanyPage() {
     }
 
     const json = (await res.json().catch(() => null)) as T | null;
-
     if (!res.ok) {
-      const msg = (json as any)?.error || `Error HTTP ${res.status} al consultar la API.`;
+      const msg = (json as any)?.error || `Error HTTP ${res.status}`;
       throw new Error(msg);
     }
 
@@ -192,22 +203,28 @@ export default function CompanyPage() {
   }
 
   async function loadAll() {
-    if (!companyId) return;
+    if (invalidCompanyId) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const cJson = await apiFetch<{ company: Company | null }>(`/api/app/companies/${companyId}`);
-      setCompany(cJson?.company ?? null);
+      const c = await apiFetch<{ company: Company | null }>(`/api/app/companies/${companyId}`);
+      setCompany(c?.company ?? null);
 
-      const sJson = await apiFetch<{ sessions: SessionRow[] }>(
-        `/api/app/companies/${companyId}/sessions`
-      );
-      setSessions(sJson?.sessions ?? []);
+      const k = await apiFetch<{ kpis: Kpis }>(`/api/app/companies/${companyId}/summary`);
+      setKpis(k?.kpis ?? null);
+
+      const w = await apiFetch<{ workers: WorkerRow[] }>(`/api/app/companies/${companyId}/workers`);
+      setWorkers(w?.workers ?? []);
+
+      const s = await apiFetch<{ sessions: SessionRow[] }>(`/api/app/companies/${companyId}/sessions`);
+      setSessions(s?.sessions ?? []);
     } catch (e: any) {
-      setError(e?.message || "No se pudo cargar la empresa/charlas");
+      setError(e?.message || "No se pudo cargar la empresa");
       setCompany(null);
+      setKpis(null);
+      setWorkers([]);
       setSessions([]);
     } finally {
       setLoading(false);
@@ -215,455 +232,320 @@ export default function CompanyPage() {
   }
 
   useEffect(() => {
-    if (!companyId) return;
+    if (invalidCompanyId) return;
     if (!token) return;
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, token]);
+  }, [companyId, token, invalidCompanyId]);
 
-  async function copyText(text: string, okMsg = "Copiado ✅") {
-    try {
-      await navigator.clipboard.writeText(text);
-      setNotice(okMsg);
-      window.setTimeout(() => setNotice(null), 1500);
-    } catch {
-      setNotice("No pude copiar (permiso del navegador).");
-      window.setTimeout(() => setNotice(null), 1800);
-    }
-  }
-
-  function openSessionAdmin(code: string) {
-    router.push(`/admin/s/${encodeURIComponent(code)}`);
-  }
-
-  function openSessionAdminNewTab(code: string) {
-    window.open(`/admin/s/${encodeURIComponent(code)}`, "_blank", "noopener,noreferrer");
-  }
-
-  function openPublicCheckin(code: string) {
-    window.open(`/c/${encodeURIComponent(code)}`, "_blank", "noopener,noreferrer");
-  }
-
-  async function copyAllFor(code: string) {
-    const up = safeUpper(code);
-    const qr = baseUrl ? `${baseUrl}/c/${encodeURIComponent(up)}` : `/c/${encodeURIComponent(up)}`;
-    const admin = baseUrl
-      ? `${baseUrl}/admin/s/${encodeURIComponent(up)}`
-      : `/admin/s/${encodeURIComponent(up)}`;
-
-    const blob = `Código: ${up}\nQR: ${qr}\nAdmin: ${admin}`;
-    await copyText(blob, "✅ Copié código + links");
-  }
-
-  async function createSession() {
-    setError(null);
-    setNotice(null);
-    setJustCreated(null);
-
-    if (!topic.trim() || !trainerName.trim()) {
-      setError("Tema y relator son obligatorios.");
-      return;
-    }
-
-    const t = await ensureTokenOrRedirect();
-    if (!t) return;
-
-    // ✅ Anti popup-blocker:
-    // si autoOpenQr = true, abrimos la pestaña "en blanco" inmediatamente (dentro del click)
-    // y después (cuando ya tengamos code) la redirigimos.
-    let qrTab: Window | null = null;
-    if (autoOpenQr && typeof window !== "undefined") {
-      qrTab = window.open("about:blank", "_blank", "noopener,noreferrer");
-    }
-
-    setCreating(true);
-
-    try {
-      const topicSnapshot = topic.trim(); // guardar antes de limpiar
-
-      const res = await fetch(`/api/app/companies/${companyId}/sessions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${t}`,
-        },
-        body: JSON.stringify({
-          topic: topicSnapshot,
-          location: location.trim() ? location.trim() : null,
-          trainer_name: trainerName.trim(),
-          session_date: sessionDate ? new Date(sessionDate).toISOString() : null,
-        }),
-      });
-
-      if (res.status === 401) {
-        router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
-        return;
-      }
-
-      const json = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        setError(json?.error || "No se pudo crear la charla");
-        // si abrimos tab y falló, la cerramos
-        try { qrTab?.close(); } catch {}
-        return;
-      }
-
-      const codeRaw: string | null = json?.code || json?.session?.code || json?.data?.code || null;
-
-      // limpiar form
-      setTopic("");
-      setLocation("");
-      setTrainerName("");
-      setSessionDate("");
-
-      await loadAll();
-
-      if (codeRaw) {
-        const code = safeUpper(codeRaw);
-
-        const publicPath = `/c/${encodeURIComponent(code)}`;
-        const adminPath = `/admin/s/${encodeURIComponent(code)}`;
-
-        const publicUrl = baseUrl ? `${baseUrl}${publicPath}` : publicPath;
-        const adminUrl = baseUrl ? `${baseUrl}${adminPath}` : adminPath;
-
-        setJustCreated({
-          code,
-          topic: json?.session?.topic ?? topicSnapshot ?? "Charla creada",
-          publicUrl,
-          adminUrl,
-        });
-
-        setNotice("Charla creada ✅");
-        window.setTimeout(() => setNotice(null), 1500);
-
-        // ✅ auto open QR (redirige la pestaña pre-abierta)
-        if (autoOpenQr) {
-          if (qrTab) {
-            try {
-              qrTab.location.href = publicPath;
-            } catch {
-              // fallback
-              openPublicCheckin(code);
-            }
-          } else {
-            openPublicCheckin(code);
-          }
-        }
-      } else {
-        setNotice("Charla creada ✅ (no recibí el código en la respuesta)");
-        window.setTimeout(() => setNotice(null), 2000);
-        try { qrTab?.close(); } catch {}
-      }
-    } catch (e: any) {
-      setError(e?.message || "No se pudo crear la charla");
-      try { qrTab?.close(); } catch {}
-    } finally {
-      setCreating(false);
-    }
-  }
+  const filteredWorkers = useMemo(() => {
+    const term = qWorkers.trim().toLowerCase();
+    if (!term) return workers;
+    return workers.filter((w) => {
+      const name = (w.full_name ?? "").toLowerCase();
+      const rut = (w.rut ?? "").toLowerCase();
+      const role = (w.role ?? "").toLowerCase();
+      return name.includes(term) || rut.includes(term) || role.includes(term);
+    });
+  }, [workers, qWorkers]);
 
   const sortedSessions = useMemo(() => {
     const copy = [...sessions];
     copy.sort((a, b) => {
-      const ad = new Date(a.created_at ?? a.session_date ?? 0).getTime();
-      const bd = new Date(b.created_at ?? b.session_date ?? 0).getTime();
+      const ad = new Date(a.session_date ?? a.created_at ?? 0).getTime();
+      const bd = new Date(b.session_date ?? b.created_at ?? 0).getTime();
       return bd - ad;
     });
     return copy;
   }, [sessions]);
 
   const filteredSessions = useMemo(() => {
-    const term = q.trim().toLowerCase();
+    const term = qSessions.trim().toLowerCase();
     if (!term) return sortedSessions;
-
     return sortedSessions.filter((s) => {
-      const t = (s.topic ?? "").toLowerCase();
-      const c = (s.code ?? "").toLowerCase();
-      const tr = (s.trainer_name ?? "").toLowerCase();
-      const loc = (s.location ?? "").toLowerCase();
-      return t.includes(term) || c.includes(term) || tr.includes(term) || loc.includes(term);
+      const code = (s.code ?? "").toLowerCase();
+      const topic = (s.topic ?? "").toLowerCase();
+      const trainer = (s.trainer_name ?? "").toLowerCase();
+      const status = (s.status ?? "").toLowerCase();
+      return code.includes(term) || topic.includes(term) || trainer.includes(term) || status.includes(term);
     });
-  }, [q, sortedSessions]);
+  }, [sortedSessions, qSessions]);
 
-  const companyTitle = company?.name || "Empresa";
-  const companySub = company?.address ? company.address : "Sin dirección";
+  async function copyText(text: string, msg = "Copiado ✅") {
+    try {
+      await navigator.clipboard.writeText(text);
+      setNotice(msg);
+      window.setTimeout(() => setNotice(null), 1400);
+    } catch {
+      setNotice("No se pudo copiar 😕");
+      window.setTimeout(() => setNotice(null), 1400);
+    }
+  }
+
+  function openAdmin(code: string) {
+    window.open(`/admin/s/${encodeURIComponent(safeUpper(code))}`, "_blank", "noopener,noreferrer");
+  }
+
+  function openQr(code: string) {
+    window.open(`/c/${encodeURIComponent(safeUpper(code))}`, "_blank", "noopener,noreferrer");
+  }
+
+  async function openPdf(pdf_path: string) {
+    try {
+      const json = await apiFetch<{ ok: boolean; signed_url: string }>("/api/app/pdfs/sign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pdf_path }),
+      });
+
+      const url = (json as any)?.signed_url;
+      if (!url) throw new Error("No recibí URL firmada");
+
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      setError(e?.message || "No se pudo abrir el PDF");
+    }
+  }
+
+  function goWorker(rut: string) {
+    router.push(`/app/company/${companyId}/workers/${encodeURIComponent(rut)}`);
+  }
+
+  const companyName = company?.name ?? "Empresa";
+  const companyLegal = company?.legal_name ?? null;
+  const companyRut = company?.rut ? formatRutChile(company.rut) : null;
+  const companyAddress = company?.address ?? null;
+  const companyInitial = (companyName.trim()[0] ?? "E").toUpperCase();
+  const isBranch = (company?.company_type ?? "hq") === "branch";
+
+  if (invalidCompanyId) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.headerCard}>
+          <div>
+            <div className={styles.kicker}>Empresa</div>
+            <div className={styles.h1}>Empresa inválida</div>
+            <div className={styles.sub}>Redirigiendo…</div>
+          </div>
+          <button type="button" className="btn btnGhost" onClick={() => router.push("/app/companies")}>
+            ← Volver
+          </button>
+        </div>
+
+        {error ? <div className={styles.alertErr}>{error}</div> : null}
+      </div>
+    );
+  }
 
   return (
-    <div className={styles.wrap}>
+    <div className={styles.page}>
       {/* Header */}
-      <div className={styles.header}>
+      <div className={styles.headerCard}>
         <div className={styles.headerLeft}>
-          <button type="button" onClick={() => router.push("/app/companies")} className={styles.back}>
-            ← Volver a empresas
+          <button type="button" className="btn btnGhost" onClick={() => router.push("/app/companies")}>
+            ← Volver
           </button>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {companyLogoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={companyLogoUrl}
-                alt="Logo empresa"
-                style={{ height: 44, width: "auto", borderRadius: 12, background: "rgba(255,255,255,0.7)", padding: 6 }}
-              />
-            ) : null}
-            <h1 className={styles.h1} style={{ margin: 0 }}>{companyTitle}</h1>
+          <div className={styles.companyRow}>
+            <div className={styles.avatar}>
+              {companyLogoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={companyLogoUrl} alt="Logo empresa" className={styles.logo} />
+              ) : (
+                <div className={styles.initial}>{companyInitial}</div>
+              )}
+            </div>
+
+            <div className={styles.headerInfo}>
+              <div className={styles.kicker}>Empresa</div>
+              <div className={styles.nameRow}>
+                <h1 className={styles.title}>{companyName}</h1>
+                <span className={`${styles.pill} ${isBranch ? styles.pillBranch : styles.pillHQ}`}>
+                  {isBranch ? "📍 Sucursal" : "🏢 Casa matriz"}
+                </span>
+              </div>
+              <div className={styles.metaLine}>
+                {companyLegal ? `Razón social: ${companyLegal}` : "Razón social: —"}
+              </div>
+              <div className={styles.metaLine}>
+                {companyRut ? `RUT: ${companyRut}` : "RUT: —"}
+                {companyAddress ? ` · ${companyAddress}` : ""}
+              </div>
+            </div>
           </div>
-          <p className={styles.sub}>
-            {companySub} · Administra charlas y comparte el QR público de asistencia.
-          </p>
         </div>
 
         <div className={styles.headerRight}>
-          <button type="button" className={styles.ghostBtn} onClick={() => router.push("/app/sessions")}>
-            📋 Mis charlas
+          <button
+            type="button"
+            className="btn btnCta"
+            onClick={() => router.push(`/app/sessions/new?companyId=${encodeURIComponent(companyId)}`)}
+          >
+            ➕ Crear charla
           </button>
 
-          <button type="button" className={styles.ghostBtn} onClick={loadAll} disabled={loading}>
+          <button type="button" className="btn btnPrimary" onClick={loadAll} disabled={loading}>
             {loading ? "Cargando…" : "Actualizar"}
           </button>
         </div>
       </div>
 
-      {/* Alerts */}
-      {error && <div className={styles.error}>{error}</div>}
-      {notice && <div className={styles.notice}>{notice}</div>}
+      {error ? <div className={styles.alertErr}>{error}</div> : null}
+      {notice ? <div className={styles.alertOk}>{notice}</div> : null}
 
-      {/* Post-create quick actions */}
-      {justCreated && (
-        <section className={styles.quickCard}>
-          <div className={styles.quickTop}>
+      {/* KPIs */}
+      <div className={styles.kpiGrid}>
+        <div className={styles.kpiCard}>
+          <div className={styles.kpiLabel}>Charlas</div>
+          <div className={styles.kpiValue}>{kpis?.sessions_total ?? 0}</div>
+          <div className={styles.kpiHint}>Total creadas</div>
+        </div>
+
+        <div className={styles.kpiCard}>
+          <div className={styles.kpiLabel}>Trabajadores</div>
+          <div className={styles.kpiValue}>{kpis?.workers_unique ?? 0}</div>
+          <div className={styles.kpiHint}>Únicos con asistencia</div>
+        </div>
+
+        <div className={styles.kpiCard}>
+          <div className={styles.kpiLabel}>Asistencias</div>
+          <div className={styles.kpiValue}>{kpis?.attendances_total ?? 0}</div>
+          <div className={styles.kpiHint}>Registros totales</div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className={styles.grid}>
+        {/* Sessions */}
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
             <div>
-              <div className={styles.quickTitle}>Charla lista ✅</div>
-              <div className={styles.quickSub}>
-                Código: <span className={styles.mono}>{safeUpper(justCreated.code)}</span>
-                {justCreated.topic ? ` · ${justCreated.topic}` : ""}
-              </div>
+              <div className={styles.panelTitle}>Charlas</div>
+              <div className={styles.panelSub}>Links QR/Admin + cierre + PDF final</div>
             </div>
 
-            <div className={styles.quickTopBtns}>
-              <button
-                type="button"
-                className={styles.copyBtn}
-                onClick={() => copyText(justCreated.code, "Código copiado ✅")}
-              >
-                Copiar código
-              </button>
-
-              <button type="button" className={styles.copyBtn} onClick={() => copyAllFor(justCreated.code)}>
-                Copiar todo
-              </button>
-            </div>
-          </div>
-
-          <div className={styles.quickActions}>
-            <button type="button" className={styles.primaryBtn} onClick={() => openPublicCheckin(justCreated.code)}>
-              Abrir QR (público)
-            </button>
-
-            <button
-              type="button"
-              className={styles.secondaryBtn}
-              onClick={() => copyText(justCreated.publicUrl, "Link QR copiado ✅")}
-            >
-              Copiar link QR
-            </button>
-
-            <button type="button" className={styles.darkBtn} onClick={() => openSessionAdmin(justCreated.code)}>
-              Admin
-            </button>
-
-            <button type="button" className={styles.secondaryBtn} onClick={() => openSessionAdminNewTab(justCreated.code)}>
-              Admin (nueva pestaña)
-            </button>
-
-            <button
-              type="button"
-              className={styles.secondaryBtn}
-              onClick={() => copyText(justCreated.adminUrl, "Link Admin copiado ✅")}
-            >
-              Copiar link Admin
-            </button>
-          </div>
-
-          <div className={styles.quickToggles}>
-            <label className={styles.toggle}>
+            <div className={styles.panelActions}>
               <input
-                type="checkbox"
-                checked={autoOpenQr}
-                onChange={(e) => setAutoOpenQr(e.target.checked)}
+                className={styles.searchInput}
+                value={qSessions}
+                onChange={(e) => setQSessions(e.target.value)}
+                placeholder="Buscar (tema / código / relator / estado)…"
               />
-              Auto-abrir QR al crear
-            </label>
-          </div>
-
-          <div className={styles.quickLinks}>
-            <div>
-              Público: <span className={styles.mono}>{justCreated.publicUrl}</span>
-            </div>
-            <div>
-              Admin: <span className={styles.mono}>{justCreated.adminUrl}</span>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Create session */}
-      <section className={styles.card}>
-        <div className={styles.cardHeader}>
-          <div>
-            <div className={styles.cardTitle}>Crear charla</div>
-            <div className={styles.cardSub}>
-              Tema y relator obligatorios. Luego comparte el QR público con asistentes.
-            </div>
-          </div>
-        </div>
-
-        <div className={styles.form}>
-          <div className={styles.field}>
-            <label className={styles.label}>Tema / Charla *</label>
-            <input
-              className={styles.input}
-              placeholder="Ej: Uso de Extintores"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.label}>Relator *</label>
-            <input
-              className={styles.input}
-              placeholder="Ej: Claudio Lizama"
-              value={trainerName}
-              onChange={(e) => setTrainerName(e.target.value)}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.label}>Lugar</label>
-            <input
-              className={styles.input}
-              placeholder="Ej: Puerto Montt"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-            />
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.label}>Fecha y hora</label>
-            <input
-              className={styles.input}
-              type="datetime-local"
-              value={sessionDate}
-              onChange={(e) => setSessionDate(e.target.value)}
-            />
-          </div>
-
-          <button type="button" disabled={creating} onClick={createSession} className={styles.createBtn}>
-            {creating ? "Creando…" : "Crear charla"}
-          </button>
-        </div>
-      </section>
-
-      {/* Sessions list */}
-      <section className={styles.card}>
-        <div className={styles.cardHeader}>
-          <div>
-            <div className={styles.cardTitle}>Charlas</div>
-            <div className={styles.cardSub}>
-              {loading ? "Cargando…" : `${filteredSessions.length} charla(s)`}
+              <button type="button" className="btn btnGhost" onClick={() => setShowAllSessions((v) => !v)}>
+                {showAllSessions ? "Ver menos" : "Ver todas"}
+              </button>
             </div>
           </div>
 
-          <input
-            className={styles.search}
-            placeholder="Buscar por tema, código, relator o lugar…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
+          {loading ? (
+            <div className={styles.stateCard}>Cargando charlas…</div>
+          ) : !filteredSessions.length ? (
+            <div className={styles.stateCard}>Aún no hay charlas para esta empresa.</div>
+          ) : (
+            <div className={styles.cards}>
+              {(showAllSessions ? filteredSessions : filteredSessions.slice(0, 10)).map((s) => {
+                const code = safeUpper(s.code);
+                const isClosed = (s.status ?? "").toLowerCase() === "closed" || !!s.closed_at;
+                const when = s.session_date ?? s.created_at;
 
-        {loading ? (
-          <div className={styles.empty}>Cargando…</div>
-        ) : !filteredSessions.length ? (
-          <div className={styles.empty}>Aún no hay charlas (o tu búsqueda no tiene resultados).</div>
-        ) : (
-          <div className={styles.grid}>
-            {filteredSessions.map((s) => {
-              const status = (s.status ?? "").toLowerCase();
-              const isClosed = status === "closed" || !!s.closed_at;
+                const publicUrl = origin ? `${origin}/c/${encodeURIComponent(code)}` : `/c/${encodeURIComponent(code)}`;
+                const adminUrl = origin
+                  ? `${origin}/admin/s/${encodeURIComponent(code)}`
+                  : `/admin/s/${encodeURIComponent(code)}`;
 
-              const code = safeUpper(s.code);
-              const publicUrl = baseUrl ? `${baseUrl}/c/${encodeURIComponent(code)}` : `/c/${encodeURIComponent(code)}`;
-              const adminUrl = baseUrl
-                ? `${baseUrl}/admin/s/${encodeURIComponent(code)}`
-                : `/admin/s/${encodeURIComponent(code)}`;
-
-              return (
-                <div key={s.id} className={styles.sessionCard}>
-                  <div className={styles.sessionTop}>
-                    <div>
-                      <div className={styles.sessionTitle}>{s.topic || "(Sin tema)"}</div>
-                      <div className={styles.metaLine}>
-                        Código: <span className={styles.mono}>{code}</span>
+                return (
+                  <div key={s.id} className={styles.sessionCard}>
+                    <div className={styles.sessionTop}>
+                      <div className={styles.sessionTitleRow}>
+                        <span className={`${styles.status} ${isClosed ? styles.statusClosed : styles.statusOpen}`}>
+                          {isClosed ? "🔒 Cerrada" : "🟢 Abierta"}
+                        </span>
+                        <span className={styles.sessionCode}>#{code}</span>
                       </div>
+
+                      <div className={styles.sessionTopic}>{s.topic ?? "(Sin tema)"}</div>
+
+                      <div className={styles.sessionMeta}>
+                        {s.location || "—"} · {fmtCL(when)}
+                      </div>
+                      <div className={styles.sessionMeta}>Relator: {s.trainer_name ?? "—"}</div>
                     </div>
 
-                    <span className={`${styles.badge} ${isClosed ? styles.badgeClosed : styles.badgeOpen}`}>
-                      {isClosed ? "Cerrada" : "Abierta"}
-                    </span>
-                  </div>
+                    <div className={styles.sessionActions}>
+                      <button className={styles.smallBtn} type="button" onClick={() => copyText(publicUrl, "Link QR copiado ✅")}>
+                        📎 QR
+                      </button>
+                      <button className={styles.smallBtn} type="button" onClick={() => copyText(adminUrl, "Link Admin copiado ✅")}>
+                        📎 Admin
+                      </button>
 
-                  <div className={styles.metaBlock}>
-                    <div className={styles.metaItem}>
-                      <span className={styles.metaLabel}>Fecha:</span>{" "}
-                      <span className={styles.metaValue}>{fmtDateTimeCL(s.session_date)}</span>
+                      <button className={styles.smallBtn} type="button" onClick={() => openQr(code)}>
+                        ↗ Abrir QR
+                      </button>
+
+                      {s.pdf_path ? (
+                        <button className={styles.smallBtnCta} type="button" onClick={() => openPdf(String(s.pdf_path))}>
+                          🧾 PDF
+                        </button>
+                      ) : null}
+
+                      <button className={styles.smallBtnPrimary} type="button" onClick={() => openAdmin(code)}>
+                        Abrir admin →
+                      </button>
                     </div>
-                    <div className={styles.metaItem}>
-                      <span className={styles.metaLabel}>Lugar:</span>{" "}
-                      <span className={styles.metaValue}>{s.location || "—"}</span>
-                    </div>
-                    <div className={styles.metaItem}>
-                      <span className={styles.metaLabel}>Relator:</span>{" "}
-                      <span className={styles.metaValue}>{s.trainer_name || "—"}</span>
+
+                    <div className={styles.sessionHint}>
+                      Tip: el PDF se genera en el admin con <b>passcode (RUT relator)</b>.
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
-                  <div className={styles.sessionActions}>
-                    <button type="button" className={styles.darkBtn} onClick={() => openSessionAdmin(code)}>
-                      Admin
-                    </button>
+        {/* Workers */}
+        <section className={styles.panel}>
+          <div className={styles.panelHead}>
+            <div>
+              <div className={styles.panelTitle}>Trabajadores</div>
+              <div className={styles.panelSub}>Se generan automáticamente desde asistencias</div>
+            </div>
 
-                    <button type="button" className={styles.secondaryBtn} onClick={() => openPublicCheckin(code)}>
-                      Abrir QR
-                    </button>
-
-                    <button type="button" className={styles.copyBtn} onClick={() => copyText(publicUrl, "Link QR copiado ✅")}>
-                      Copiar QR
-                    </button>
-
-                    <button type="button" className={styles.copyBtn} onClick={() => copyText(adminUrl, "Link Admin copiado ✅")}>
-                      Copiar Admin
-                    </button>
-
-                    <button type="button" className={styles.copyBtn} onClick={() => copyAllFor(code)}>
-                      Copiar todo
-                    </button>
-                  </div>
-
-                  <div className={styles.linkHint}>
-                    Público: <span className={styles.mono}>/c/{code}</span>
-                    <span className={styles.dot}>•</span>
-                    Admin: <span className={styles.mono}>/admin/s/{code}</span>
-                  </div>
-                </div>
-              );
-            })}
+            <div className={styles.panelActions}>
+              <input
+                className={styles.searchInput}
+                value={qWorkers}
+                onChange={(e) => setQWorkers(e.target.value)}
+                placeholder="Buscar (nombre / RUT / cargo)…"
+              />
+              <button type="button" className="btn btnGhost" onClick={() => setShowAllWorkers((v) => !v)}>
+                {showAllWorkers ? "Ver menos" : "Ver todos"}
+              </button>
+            </div>
           </div>
-        )}
-      </section>
+
+          {loading ? (
+            <div className={styles.stateCard}>Cargando trabajadores…</div>
+          ) : !filteredWorkers.length ? (
+            <div className={styles.stateCard}>Aún no hay trabajadores registrados para esta empresa.</div>
+          ) : (
+            <div className={styles.workerList}>
+              {(showAllWorkers ? filteredWorkers : filteredWorkers.slice(0, 12)).map((w) => (
+                <button key={w.rut} type="button" className={styles.workerRow} onClick={() => goWorker(w.rut)}>
+                  <div className={styles.workerMain}>
+                    <div className={styles.workerName}>{w.full_name ?? "(Sin nombre)"}</div>
+                    <div className={styles.workerMeta}>
+                      {formatRutChile(w.rut)} · {w.role ?? "—"}
+                    </div>
+                  </div>
+                  <div className={styles.workerRight}>→</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

@@ -1,10 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import EditCompanyModal, { Company } from "@/components/app/EditCompanyModal";
 import styles from "./page.module.css";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(v: unknown) {
+  return typeof v === "string" && UUID_RE.test(v.trim());
+}
+
+function fmtCL(iso?: string | null) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("es-CL");
+  } catch {
+    return "—";
+  }
+}
+
+type TypeFilter = "all" | "hq" | "branch";
+type SortKey = "newest" | "oldest" | "az";
 
 export default function CompaniesPage() {
   const router = useRouter();
@@ -14,6 +33,11 @@ export default function CompaniesPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+
+  // UI controls
+  const [q, setQ] = useState("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("newest");
 
   async function getTokenOrRedirect() {
     const { data } = await supabaseBrowser.auth.getSession();
@@ -47,7 +71,7 @@ export default function CompaniesPage() {
       return;
     }
 
-    const list: Company[] = (json?.companies ?? []).filter((c: any) => c?.id);
+    const list: Company[] = (json?.companies ?? []).filter((c: any) => c?.id && isUuid(c.id));
     setCompanies(list);
     setLoading(false);
   }
@@ -57,8 +81,16 @@ export default function CompaniesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function openCompany(companyId: string) {
-    router.push(`/app/company/${companyId}`);
+  function openCompany(companyId: unknown) {
+    const id = typeof companyId === "string" ? companyId.trim() : "";
+
+    if (!isUuid(id)) {
+      setError("⚠️ No pude abrir la empresa (ID inválido). Actualiza e intenta nuevamente.");
+      return;
+    }
+
+    // ✅ Ruta canónica
+    router.push(`/app/company/${id}`);
   }
 
   function openEdit(company: Company) {
@@ -74,91 +106,190 @@ export default function CompaniesPage() {
     return `${base}/storage/v1/object/public/company-logos/${clean}`;
   }
 
+  const filtered = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    let list = [...companies];
+
+    if (typeFilter !== "all") {
+      list = list.filter((c: any) => (c.company_type ?? "hq") === typeFilter);
+    }
+
+    if (query) {
+      list = list.filter((c: any) => {
+        const hay = [
+          c.name,
+          c.legal_name,
+          c.rut,
+          c.address,
+          c.contact_name,
+          c.contact_email,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(query);
+      });
+    }
+
+    list.sort((a: any, b: any) => {
+      if (sortKey === "az") {
+        const an = (a?.name ?? "").toString().toLowerCase();
+        const bn = (b?.name ?? "").toString().toLowerCase();
+        return an.localeCompare(bn);
+      }
+
+      const ad = a?.created_at ? new Date(a.created_at).getTime() : 0;
+      const bd = b?.created_at ? new Date(b.created_at).getTime() : 0;
+
+      if (sortKey === "oldest") return ad - bd;
+      return bd - ad; // newest
+    });
+
+    return list;
+  }, [companies, q, typeFilter, sortKey]);
+
+  const countLabel = useMemo(() => {
+    const total = companies.length;
+    const shown = filtered.length;
+    if (loading) return "Cargando…";
+    if (!q && typeFilter === "all") return `${total} empresa(s)`;
+    return `${shown} de ${total}`;
+  }, [companies.length, filtered.length, loading, q, typeFilter]);
+
   return (
     <div className={styles.page}>
       {/* Header */}
-      <div className={`glass ${styles.headerCard}`}>
+      <div className={styles.head}>
         <div>
-          <div className={styles.title}>Mis empresas</div>
-          <div className={styles.sub}>Selecciona una empresa para administrar sus charlas</div>
+          <div className={styles.kicker}>Empresas</div>
+          <h1 className={styles.h1}>Mis empresas</h1>
+          <p className={styles.sub}>Selecciona una empresa para ver resumen, charlas y trabajadores.</p>
         </div>
 
-        <button className="btn btnCta" onClick={() => router.push("/app/companies/new")}>
-          ➕ Crear empresa
-        </button>
+        <div className={styles.headActions}>
+          <div className={styles.counter}>{countLabel}</div>
+          <button className="btn btnCta" onClick={() => router.push("/app/companies/new")}>
+            ➕ Crear empresa
+          </button>
+        </div>
       </div>
 
-      {/* Estado */}
-      {error && (
-        <div className={`glass ${styles.stateCard} border border-red-200/70 bg-red-50/60`}>
-          <div className="text-sm font-extrabold text-red-700">{error}</div>
+      {/* Toolbar */}
+      <div className={styles.toolbar}>
+        <div className={styles.searchWrap}>
+          <span className={styles.searchIcon}>⌕</span>
+          <input
+            className={styles.searchInput}
+            placeholder="Buscar por nombre, RUT, dirección, contacto…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          {q ? (
+            <button className={styles.clearBtn} type="button" onClick={() => setQ("")} aria-label="Limpiar búsqueda">
+              ✕
+            </button>
+          ) : null}
         </div>
-      )}
+
+        <div className={styles.filters}>
+          <select
+            className={styles.select}
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+          >
+            <option value="all">Todas</option>
+            <option value="hq">Casa matriz</option>
+            <option value="branch">Sucursal</option>
+          </select>
+
+          <select
+            className={styles.select}
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+          >
+            <option value="newest">Más nuevas</option>
+            <option value="oldest">Más antiguas</option>
+            <option value="az">A–Z</option>
+          </select>
+
+          <button className="btn btnGhost" type="button" onClick={loadCompanies}>
+            Actualizar
+          </button>
+        </div>
+      </div>
+
+      {/* States */}
+      {error ? <div className={styles.errBox}>{error}</div> : null}
 
       {loading ? (
-        <div className={`glass ${styles.stateCard}`}>
-          <div className="opacity-70 font-extrabold">Cargando…</div>
-        </div>
-      ) : !companies.length ? (
-        <div className={`glass ${styles.stateCard}`}>
-          <div className="opacity-70 font-extrabold">Aún no creas ninguna empresa.</div>
+        <div className={styles.stateCard}>Cargando empresas…</div>
+      ) : filtered.length === 0 ? (
+        <div className={styles.stateCard}>
+          {companies.length === 0 ? (
+            <>
+              Aún no tienes empresas. Crea la primera ✅{" "}
+              <button className={styles.inlineLink} onClick={() => router.push("/app/companies/new")}>
+                Crear empresa
+              </button>
+            </>
+          ) : (
+            <>No hay resultados con los filtros actuales.</>
+          )}
         </div>
       ) : (
-        <div className={styles.gridCompanies}>
-          {companies.map((c: any) => {
+        <div className={styles.grid}>
+          {filtered.map((c: any) => {
             const logoUrl = logoPublicUrl(c.logo_path ?? null);
             const initial = (c.name?.trim()?.[0] ?? "E").toUpperCase();
 
-            const type: string | null = c.company_type ?? null;
+            const type: string | null = c.company_type ?? "hq";
             const isBranch = type === "branch";
-            const pillText = isBranch ? "📍 Sucursal" : "🏢 Casa matriz";
 
             return (
-              <div key={c.id} className={`glass ${styles.companyCard}`}>
-                <div className={styles.companyTop}>
-                  <div className={styles.companyAvatar}>
+              <div key={c.id} className={styles.card}>
+                <div className={styles.cardTop}>
+                  <div className={styles.avatar}>
                     {logoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={logoUrl} alt="logo" className={styles.companyLogo} />
+                      <img src={logoUrl} alt="logo" className={styles.logoImg} />
                     ) : (
-                      <div className={styles.companyInitial}>{initial}</div>
+                      <div className={styles.initial}>{initial}</div>
                     )}
                   </div>
 
-                  <div className={styles.companyInfo}>
-                    <div className={styles.companyName}>{c.name}</div>
+                  <div className={styles.info}>
+                    <div className={styles.nameRow}>
+                      <div className={styles.name}>{c.name || "Empresa"}</div>
+                      <span className={`${styles.pill} ${isBranch ? styles.pillBranch : styles.pillHQ}`}>
+                        {isBranch ? "📍 Sucursal" : "🏢 Casa matriz"}
+                      </span>
+                    </div>
 
-                    <div className={styles.companyMeta}>
+                    <div className={styles.meta}>
                       {c.legal_name ? `Razón social: ${c.legal_name}` : "Razón social: —"}
                     </div>
 
-                    <div className={styles.companyMeta}>
+                    <div className={styles.meta}>
                       {c.rut ? `RUT: ${c.rut}` : "RUT: —"} {c.address ? `· ${c.address}` : ""}
                     </div>
 
-                    <div className={styles.metaRow}>
-                      <span className={`${styles.pill} ${isBranch ? styles.pillBranch : styles.pillHQ}`}>
-                        {pillText}
-                      </span>
-
+                    <div className={styles.meta}>
                       {c.contact_name || c.contact_email ? (
-                        <span className={styles.pill}>
+                        <>
                           👤 {c.contact_name ?? "—"} · {c.contact_email ?? "—"}
-                        </span>
+                        </>
                       ) : (
-                        <span className={styles.pill}>👤 Contacto: —</span>
+                        <>👤 Contacto: —</>
                       )}
                     </div>
                   </div>
                 </div>
 
-                <div className={styles.companyBottom}>
-                  <div className={styles.companyCreated}>
-                    Creada: {c.created_at ? new Date(c.created_at).toLocaleString("es-CL") : "—"}
-                  </div>
+                <div className={styles.cardBottom}>
+                  <div className={styles.created}>Creada: {fmtCL(c.created_at)}</div>
 
-                  <div className={styles.companyActions}>
-                    <button type="button" className="btn" onClick={() => openEdit(c)}>
+                  <div className={styles.actions}>
+                    <button type="button" className="btn btnGhost" onClick={() => openEdit(c)}>
                       Editar
                     </button>
 

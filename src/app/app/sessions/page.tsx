@@ -1,22 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import EditSessionModal, { SessionRow } from "@/components/app/EditSessionModal";
-import QrModal from "@/components/app/QrModal";
 import styles from "./page.module.css";
 
-type Company = { id: string; name: string; address: string | null };
-
-type SessionWithCompany = SessionRow & {
-  companies?: Company | null;
-  attendees_count?: number;
-  pdf_path?: string | null;
-  pdf_generated_at?: string | null;
+type Session = {
+  id: string;
+  code: string;
+  topic: string | null;
+  location: string | null;
+  session_date: string | null;
+  trainer_name: string | null;
+  status: string | null;
+  closed_at: string | null;
+  company_id: string | null;
+  company?: { name?: string | null } | null;
+  created_at?: string | null;
 };
 
-type PipeKey = "open_empty" | "open_progress" | "closed" | "pdf";
+type StatusFilter = "all" | "open" | "closed";
+type SortKey = "newest" | "oldest" | "az";
 
 function fmtCL(iso?: string | null) {
   if (!iso) return "—";
@@ -27,313 +31,253 @@ function fmtCL(iso?: string | null) {
   }
 }
 
-function isClosed(s: any) {
-  const st = (s.status ?? "").toLowerCase();
-  return st === "closed" || !!s.closed_at;
+async function fetchWithToken<T>(url: string): Promise<T> {
+  const { data } = await supabaseBrowser.auth.getSession();
+  const token = data.session?.access_token;
+
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((json as any)?.error || "Error al cargar");
+  return json as T;
 }
 
 export default function SessionsPage() {
-  const router = useRouter();
-
   const [loading, setLoading] = useState(true);
-  const [sessions, setSessions] = useState<SessionWithCompany[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<Session[]>([]);
 
+  // UI
   const [q, setQ] = useState("");
-  const [toast, setToast] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sortKey, setSortKey] = useState<SortKey>("newest");
 
-  const [pipe, setPipe] = useState<PipeKey>("open_empty");
-  const [editing, setEditing] = useState<SessionRow | null>(null);
+  const origin = useMemo(() => (typeof window !== "undefined" ? window.location.origin : ""), []);
 
-  // ✅ QR Modal state
-  const [qrOpen, setQrOpen] = useState(false);
-  const [qrCode, setQrCode] = useState<string | null>(null);
-  const [qrUrl, setQrUrl] = useState<string | null>(null);
-
-  const baseUrl = useMemo(() => {
-    if (typeof window === "undefined") return "";
-    return window.location.origin;
-  }, []);
-
-  async function getTokenOrRedirect() {
-    const { data } = await supabaseBrowser.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) {
-      router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
-      return null;
-    }
-    return token;
-  }
-
-  async function loadAll() {
+  async function loadSessions() {
     setLoading(true);
-    setError(null);
+    setErr(null);
 
-    const token = await getTokenOrRedirect();
-    if (!token) return;
-
-    const res = await fetch("/api/app/sessions", {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-
-    if (res.status === 401) {
-      router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
-      return;
-    }
-
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
+    try {
+      const s = await fetchWithToken<{ sessions?: Session[] }>("/api/app/sessions");
+      setSessions(Array.isArray(s.sessions) ? s.sessions : []);
+    } catch (e: any) {
       setSessions([]);
-      setError(json?.error || "No se pudieron cargar las charlas");
+      setErr(e?.message || "No se pudieron cargar las charlas");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setSessions(json?.sessions ?? []);
-    setLoading(false);
   }
 
   useEffect(() => {
-    loadAll();
+    loadSessions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function copy(text: string, msg = "Copiado ✅") {
+  async function copy(text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      setToast(msg);
-      setTimeout(() => setToast(null), 1200);
     } catch {
-      setToast("No se pudo copiar 😕");
-      setTimeout(() => setToast(null), 1800);
+      // sin ruido
     }
   }
-
-  async function signAndOpenPdf(pdf_path: string) {
-    const token = await getTokenOrRedirect();
-    if (!token) return;
-
-    setToast("Abriendo PDF…");
-    try {
-      const res = await fetch("/api/app/pdfs/sign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ pdf_path }),
-      });
-
-      const json = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error || "No se pudo abrir el PDF");
-
-      window.open(json.signed_url, "_blank", "noopener,noreferrer");
-      setToast("PDF abierto ✅");
-      setTimeout(() => setToast(null), 1200);
-    } catch (e: any) {
-      setToast(e?.message || "Error al abrir PDF");
-      setTimeout(() => setToast(null), 2200);
-    }
-  }
-
-  async function generatePdf(code: string) {
-    const token = await getTokenOrRedirect();
-    if (!token) return;
-
-    setToast("Generando PDF…");
-    try {
-      const res = await fetch("/api/admin/generate-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ code }),
-      });
-
-      const json = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error || "No se pudo generar PDF");
-
-      window.open(json.signed_url, "_blank", "noopener,noreferrer");
-      setToast("PDF listo ✅");
-      setTimeout(() => setToast(null), 1200);
-
-      await loadAll();
-    } catch (e: any) {
-      setToast(e?.message || "Error PDF");
-      setTimeout(() => setToast(null), 2200);
-    }
-  }
-
-  function openQr(code: string) {
-    const upper = code.toUpperCase();
-    const url = baseUrl ? `${baseUrl}/c/${encodeURIComponent(upper)}` : `/c/${encodeURIComponent(upper)}`;
-    setQrCode(upper);
-    setQrUrl(url);
-    setQrOpen(true);
-  }
-
-  const counts = useMemo(() => {
-    const openEmpty = sessions.filter((s) => !isClosed(s) && (s.attendees_count ?? 0) === 0).length;
-    const openProgress = sessions.filter((s) => !isClosed(s) && (s.attendees_count ?? 0) > 0).length;
-    const closedNoPdf = sessions.filter((s) => isClosed(s) && !s.pdf_path).length;
-    const pdfGen = sessions.filter((s) => !!s.pdf_path).length;
-    return { openEmpty, openProgress, closedNoPdf, pdfGen };
-  }, [sessions]);
 
   const filtered = useMemo(() => {
+    const query = q.trim().toLowerCase();
     let list = [...sessions];
 
-    if (pipe === "open_empty") list = list.filter((s) => !isClosed(s) && (s.attendees_count ?? 0) === 0);
-    if (pipe === "open_progress") list = list.filter((s) => !isClosed(s) && (s.attendees_count ?? 0) > 0);
-    if (pipe === "closed") list = list.filter((s) => isClosed(s) && !s.pdf_path);
-    if (pipe === "pdf") list = list.filter((s) => !!s.pdf_path);
+    list = list.map((s) => ({
+      ...s,
+      code: (s.code || "").toUpperCase(),
+    }));
 
-    const term = q.trim().toLowerCase();
-    if (term) {
-      list = list.filter((s: any) => {
-        const company = s.companies?.name ?? "";
-        const topic = s.topic ?? "";
-        const code = s.code ?? "";
-        const trainer = s.trainer_name ?? "";
-        const loc = s.location ?? "";
-        return (
-          company.toLowerCase().includes(term) ||
-          topic.toLowerCase().includes(term) ||
-          code.toLowerCase().includes(term) ||
-          trainer.toLowerCase().includes(term) ||
-          loc.toLowerCase().includes(term)
-        );
+    if (statusFilter !== "all") {
+      list = list.filter((s) => {
+        const closed = (s.status || "").toLowerCase() === "closed" || !!s.closed_at;
+        return statusFilter === "closed" ? closed : !closed;
+      });
+    }
+
+    if (query) {
+      list = list.filter((s) => {
+        const hay = [
+          s.code,
+          s.topic,
+          s.location,
+          s.trainer_name,
+          s.company?.name,
+          s.status,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(query);
       });
     }
 
     list.sort((a, b) => {
-      const ad = new Date(a.created_at ?? a.session_date ?? 0).getTime();
-      const bd = new Date(b.created_at ?? b.session_date ?? 0).getTime();
-      return bd - ad;
+      if (sortKey === "az") {
+        const an = (a.topic ?? a.code ?? "").toLowerCase();
+        const bn = (b.topic ?? b.code ?? "").toLowerCase();
+        return an.localeCompare(bn);
+      }
+
+      const ad = a.session_date ? new Date(a.session_date).getTime() : 0;
+      const bd = b.session_date ? new Date(b.session_date).getTime() : 0;
+
+      if (sortKey === "oldest") return ad - bd;
+      return bd - ad; // newest
     });
 
     return list;
-  }, [sessions, q, pipe]);
+  }, [sessions, q, statusFilter, sortKey]);
+
+  const countLabel = useMemo(() => {
+    if (loading) return "Cargando…";
+    if (!q && statusFilter === "all") return `${sessions.length} charla(s)`;
+    return `${filtered.length} de ${sessions.length}`;
+  }, [loading, sessions.length, filtered.length, q, statusFilter]);
 
   return (
     <div className={styles.page}>
+      {/* Header */}
       <div className={styles.head}>
         <div>
-          <div className={styles.title}>Mis charlas</div>
-          <div className={styles.sub}>Abierta → En desarrollo → Cerrada → PDF generado</div>
+          <div className={styles.kicker}>Charlas</div>
+          <h1 className={styles.h1}>Mis charlas</h1>
+          <p className={styles.sub}>
+            Copia links, abre el admin para cierre con firma y genera PDF final.
+          </p>
         </div>
 
-        <div className={styles.actionsTop}>
-          <button className={styles.secondary} onClick={() => router.push("/app/sessions/new")} type="button">
+        <div className={styles.headActions}>
+          <div className={styles.counter}>{countLabel}</div>
+          <Link href="/app/sessions/new" className="btn btnCta">
             ➕ Crear charla
-          </button>
-          <button className={styles.primary} onClick={loadAll} disabled={loading} type="button">
-            {loading ? "Cargando…" : "Actualizar"}
+          </Link>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className={styles.toolbar}>
+        <div className={styles.searchWrap}>
+          <span className={styles.searchIcon}>⌕</span>
+          <input
+            className={styles.searchInput}
+            placeholder="Buscar por código, tema, empresa, relator, estado…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          {q ? (
+            <button className={styles.clearBtn} type="button" onClick={() => setQ("")} aria-label="Limpiar búsqueda">
+              ✕
+            </button>
+          ) : null}
+        </div>
+
+        <div className={styles.filters}>
+          <select
+            className={styles.select}
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          >
+            <option value="all">Todas</option>
+            <option value="open">Abiertas</option>
+            <option value="closed">Cerradas</option>
+          </select>
+
+          <select className={styles.select} value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
+            <option value="newest">Más recientes</option>
+            <option value="oldest">Más antiguas</option>
+            <option value="az">A–Z</option>
+          </select>
+
+          <button className="btn btnGhost" type="button" onClick={loadSessions}>
+            Actualizar
           </button>
         </div>
       </div>
 
-      {error && <div className={styles.error}>{error}</div>}
+      {err ? <div className={styles.errBox}>{err}</div> : null}
 
-      <div className={styles.pipeline}>
-        <button type="button" className={`${styles.pipeStep} ${pipe === "open_empty" ? styles.pipeActive : ""}`} onClick={() => setPipe("open_empty")}>
-          Abierta <span className={styles.pipeBadge}>{counts.openEmpty}</span>
-        </button>
-        <button type="button" className={`${styles.pipeStep} ${pipe === "open_progress" ? styles.pipeActive : ""}`} onClick={() => setPipe("open_progress")}>
-          En desarrollo <span className={styles.pipeBadge}>{counts.openProgress}</span>
-        </button>
-        <button type="button" className={`${styles.pipeStep} ${pipe === "closed" ? styles.pipeActive : ""}`} onClick={() => setPipe("closed")}>
-          Cerrada <span className={styles.pipeBadge}>{counts.closedNoPdf}</span>
-        </button>
-        <button type="button" className={`${styles.pipeStep} ${pipe === "pdf" ? styles.pipeActive : ""}`} onClick={() => setPipe("pdf")}>
-          PDF generado <span className={styles.pipeBadge}>{counts.pdfGen}</span>
-        </button>
-      </div>
+      {loading ? (
+        <div className={styles.stateCard}>Cargando charlas…</div>
+      ) : filtered.length === 0 ? (
+        <div className={styles.stateCard}>
+          {sessions.length === 0 ? (
+            <>
+              Aún no tienes charlas. Crea la primera ✅{" "}
+              <Link className={styles.inlineLink} href="/app/sessions/new">
+                Crear charla
+              </Link>
+            </>
+          ) : (
+            <>No hay resultados con los filtros actuales.</>
+          )}
+        </div>
+      ) : (
+        <div className={styles.grid}>
+          {filtered.map((s) => {
+            const code = (s.code || "").toUpperCase();
+            const isClosed = (s.status || "").toLowerCase() === "closed" || !!s.closed_at;
 
-      <div className={styles.toolbar}>
-        <input className={styles.search} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por empresa, tema, código, relator o lugar…" />
-        {toast && <div className={styles.toast}>{toast}</div>}
-      </div>
+            const qrLink = origin ? `${origin}/c/${code}` : `/c/${code}`;
+            const adminLink = origin ? `${origin}/admin/s/${code}` : `/admin/s/${code}`;
 
-      <div className={styles.listCard}>
-        {loading ? (
-          <div className={styles.muted}>Cargando…</div>
-        ) : !filtered.length ? (
-          <div className={styles.muted}>No hay charlas para este estado.</div>
-        ) : (
-          <div className={styles.rows}>
-            {filtered.map((s: any) => {
-              const closed = isClosed(s);
-              const code = String(s.code ?? "").toUpperCase();
-              const adminPath = `/admin/s/${encodeURIComponent(code)}`;
-              const count = s.attendees_count ?? 0;
-
-              const badgeLabel = s.pdf_path ? "PDF GENERADO" : closed ? "CERRADA" : count > 0 ? "EN DESARROLLO" : "ABIERTA";
-
-              return (
-                <div key={s.id} className={styles.row}>
-                  <div className={styles.rowMain}>
-                    <div className={styles.rowTopLine}>
-                      <span className={styles.topic}>{s.topic || "(Sin tema)"}</span>
-                      <span className={`${styles.badge} ${closed ? styles.badgeClosed : styles.badgeOpen}`}>{badgeLabel}</span>
-                    </div>
-
-                    <div className={styles.meta}>
-                      <span className={styles.mono}>{code}</span>
-                      <span className={styles.dot}>•</span>
-                      <span>{s.companies?.name ?? "—"}</span>
-                      <span className={styles.dot}>•</span>
-                      <span>{s.trainer_name ?? "—"}</span>
-                      <span className={styles.dot}>•</span>
-                      <span>{fmtCL(s.session_date)}</span>
-                      <span className={styles.dot}>•</span>
-                      <span>{count} asistente(s)</span>
-                    </div>
+            return (
+              <div key={s.id} className={styles.card}>
+                <div className={styles.cardHead}>
+                  <div className={styles.titleRow}>
+                    <span className={`${styles.pill} ${isClosed ? styles.pillClosed : styles.pillOpen}`}>
+                      {isClosed ? "🔒 Cerrada" : "🟢 Abierta"}
+                    </span>
+                    <span className={styles.code}>#{code}</span>
                   </div>
 
-                  <div className={styles.rowActions}>
-                    {/* ✅ QR en modal */}
-                    <button className={styles.btn} onClick={() => openQr(code)} type="button">
-                      QR
-                    </button>
-
-                    <button className={styles.btnDark} onClick={() => router.push(adminPath)} type="button">
-                      Admin
-                    </button>
-
-                    <button
-                      className={styles.btnThin}
-                      onClick={() => copy(baseUrl ? `${baseUrl}/c/${code}` : `/c/${code}`, "Link QR copiado ✅")}
-                      type="button"
-                    >
-                      Copiar
-                    </button>
-
-                    <button className={styles.btnThin} onClick={() => setEditing(s)} type="button">
-                      Editar
-                    </button>
-
-                    {closed && (
-                      <>
-                        {s.pdf_path ? (
-                          <button className={styles.btnPdf} onClick={() => signAndOpenPdf(String(s.pdf_path))} type="button">
-                            Abrir PDF
-                          </button>
-                        ) : (
-                          <button className={styles.btnPdf} onClick={() => generatePdf(code)} type="button">
-                            Generar PDF
-                          </button>
-                        )}
-                      </>
-                    )}
+                  <div className={styles.topic}>{s.topic || "Charla"}</div>
+                  <div className={styles.meta}>
+                    {s.company?.name ? `${s.company.name} · ` : ""}
+                    {s.location || "—"} · {fmtCL(s.session_date)}
+                  </div>
+                  <div className={styles.meta}>
+                    Relator: {s.trainer_name || "—"} {s.closed_at ? `· Cerrada: ${fmtCL(s.closed_at)}` : ""}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
-      <EditSessionModal open={!!editing} session={editing} onClose={() => setEditing(null)} onSaved={loadAll} />
+                <div className={styles.cardActions}>
+                  <button className={styles.iconBtn} type="button" onClick={() => copy(qrLink)} title="Copiar link QR">
+                    📎 QR
+                  </button>
 
-      {/* ✅ Modal QR */}
-      <QrModal open={qrOpen} code={qrCode} publicUrl={qrUrl} onClose={() => setQrOpen(false)} />
+                  <button
+                    className={styles.iconBtn}
+                    type="button"
+                    onClick={() => copy(adminLink)}
+                    title="Copiar link Admin"
+                  >
+                    📎 Admin
+                  </button>
+
+                  <a className={styles.iconBtn} href={qrLink} target="_blank" rel="noreferrer" title="Abrir QR">
+                    ↗ QR
+                  </a>
+
+                  <Link className={`btn btnPrimary ${styles.openBtn}`} href={`/admin/s/${code}`}>
+                    Abrir admin →
+                  </Link>
+                </div>
+
+                <div className={styles.hint}>
+                  Tip: el PDF final se genera dentro del admin con <b>passcode (RUT relator)</b>.
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

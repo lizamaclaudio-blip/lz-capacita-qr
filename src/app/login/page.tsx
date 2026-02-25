@@ -4,10 +4,10 @@ import Link from "next/link";
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import styles from "./page.module.css";
 
 function safeNext(next: string | null) {
   if (!next) return null;
-  // solo rutas internas
   if (next.startsWith("/") && !next.startsWith("//")) return next;
   return null;
 }
@@ -27,7 +27,6 @@ function LoginInner() {
 
   async function handleLogin() {
     if (loading) return;
-
     setErr(null);
     setLoading(true);
 
@@ -52,96 +51,126 @@ function LoginInner() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md glass card">
-        <div className="flex items-center gap-3">
-          <div className="h-11 w-11 rounded-2xl overflow-hidden border border-white/30 bg-white/60 flex items-center justify-center">
+    <div className={styles.page}>
+      <div className={styles.grid}>
+        {/* LEFT - “marketing” */}
+        <aside className={styles.left}>
+          <div className={styles.brandRow}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/lz-capacita-qr.png" alt="LZ Capacita QR" className="h-full w-full object-contain p-1" />
-          </div>
-
-          <div className="min-w-0">
-            <div className="text-lg font-black leading-tight">LZ Capacita QR</div>
-            <div className="text-xs font-extrabold opacity-70">Acceso al panel</div>
-          </div>
-        </div>
-
-        <h1 className="mt-5 text-2xl font-black">Iniciar sesión</h1>
-        <p className="mt-1 text-sm opacity-70">
-          Entra para gestionar empresas, charlas y asistentes.
-        </p>
-
-        {err && (
-          <div className="mt-4 rounded-xl border border-red-200/70 bg-red-50/70 p-3 text-sm text-red-700">
-            {err}
-          </div>
-        )}
-
-        <div className="mt-5 space-y-3">
-          <div>
-            <label className="text-xs font-extrabold opacity-70">Correo</label>
-            <input
-              className="input mt-1"
-              placeholder="correo@ejemplo.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              inputMode="email"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-extrabold opacity-70">Contraseña</label>
-            <div className="mt-1 flex gap-2">
-              <input
-                className="input"
-                placeholder="Contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                type={showPass ? "text" : "password"}
-                autoComplete="current-password"
-                required
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleLogin();
-                }}
-              />
-              <button
-                type="button"
-                className="btn"
-                style={{
-                  padding: "10px 12px",
-                  border: "1px solid rgba(15,23,42,.12)",
-                  background: "rgba(255,255,255,.65)",
-                }}
-                onClick={() => setShowPass((v) => !v)}
-                title={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
-              >
-                {showPass ? "🙈" : "👁️"}
-              </button>
+            <img className={styles.logo} src="/brand/lz-capacita-qr.png" alt="LZ Capacita QR" />
+            <div className={styles.brandText}>
+              <div className={styles.brandTitle}>LZ Capacita QR</div>
+              <div className={styles.brandSub}>QR · Firma · PDF Final</div>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleLogin}
-            disabled={loading}
-            className="btn btnPrimary w-full disabled:opacity-60"
-          >
-            {loading ? "Entrando..." : "Entrar"}
-          </button>
-        </div>
+          <h1 className={styles.h1}>
+            Capacita, firma y respalda
+            <br />
+            <span className={styles.h1Strong}>sin planillas.</span>
+          </h1>
 
-        <div className="mt-4 text-sm">
-          ¿No tienes cuenta?{" "}
-          <Link className="font-extrabold underline" href="/signup">
-            Crear cuenta
-          </Link>
-        </div>
+          <p className={styles.p}>
+            Accede al panel para gestionar empresas, charlas y asistentes. Cierra con firma del relator y genera un PDF
+            final listo para auditoría.
+          </p>
 
-        <div className="mt-6 text-center text-xs opacity-60 font-extrabold">
-          Creado por Claudio Lizama © 2026
-        </div>
+          <div className={styles.bullets}>
+            <div className={styles.bullet}>✅ RUT + DV validado</div>
+            <div className={styles.bullet}>✅ Antiduplicados</div>
+            <div className={styles.bullet}>✅ Firma asistentes + relator</div>
+            <div className={styles.bullet}>✅ PDF consolidado con logo</div>
+          </div>
+
+          <div className={styles.miniCta}>
+            <Link href="/signup" className="btn btnCta">
+              Probar demo
+            </Link>
+            <a className="btn btnGhost" href="/">
+              Ver landing
+            </a>
+          </div>
+
+          <div className={styles.foot}>Creado por Claudio Lizama © 2026</div>
+        </aside>
+
+        {/* RIGHT - form */}
+        <section className={styles.right}>
+          <div className={styles.card}>
+            <div className={styles.cardHead}>
+              <div className={styles.cardTitle}>Iniciar sesión</div>
+              <div className={styles.cardSub}>Ingresa con tu correo y contraseña</div>
+            </div>
+
+            {err && <div className={styles.errBox}>{err}</div>}
+
+            <div className={styles.form}>
+              <div className={styles.field}>
+                <label className={styles.label}>Correo</label>
+                <input
+                  className="input"
+                  placeholder="correo@ejemplo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  inputMode="email"
+                  required
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleLogin();
+                  }}
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>Contraseña</label>
+
+                <div className={styles.passRow}>
+                  <input
+                    className="input"
+                    placeholder="Contraseña"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    type={showPass ? "text" : "password"}
+                    autoComplete="current-password"
+                    required
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleLogin();
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    className="btn btnGhost"
+                    onClick={() => setShowPass((v) => !v)}
+                    title={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    style={{ padding: "11px 12px" }}
+                  >
+                    {showPass ? "🙈" : "👁️"}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleLogin}
+                disabled={loading}
+                className="btn btnPrimary"
+                style={{ width: "100%" }}
+              >
+                {loading ? "Entrando..." : "Entrar"}
+              </button>
+
+              <div className={styles.alt}>
+                ¿No tienes cuenta?{" "}
+                <Link className={styles.link} href="/signup">
+                  Crear cuenta
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.mobileFoot}>LZ Capacita QR © 2026</div>
+        </section>
       </div>
     </div>
   );

@@ -4,6 +4,13 @@ import { cleanRut, isValidRut } from "@/lib/rut";
 
 export const dynamic = "force-dynamic";
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(v: unknown) {
+  return typeof v === "string" && UUID_RE.test(v.trim());
+}
+
 function getToken(req: NextRequest) {
   const auth = req.headers.get("authorization") || "";
   const m = auth.match(/^Bearer\s+(.+)$/i);
@@ -67,6 +74,7 @@ export async function GET(req: NextRequest, ctx?: any) {
   try {
     const companyId = resolveCompanyId(req, ctx);
     if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    if (!isUuid(companyId)) return NextResponse.json({ error: "companyId inválido" }, { status: 400 });
 
     const auth = await requireUser(req);
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -92,6 +100,7 @@ export async function POST(req: NextRequest, ctx?: any) {
   try {
     const companyId = resolveCompanyId(req, ctx);
     if (!companyId) return NextResponse.json({ error: "Missing companyId" }, { status: 400 });
+    if (!isUuid(companyId)) return NextResponse.json({ error: "companyId inválido" }, { status: 400 });
 
     const auth = await requireUser(req);
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });

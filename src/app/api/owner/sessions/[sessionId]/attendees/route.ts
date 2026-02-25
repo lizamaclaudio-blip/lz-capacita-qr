@@ -34,7 +34,8 @@ async function requireOwner(req: NextRequest) {
   return { ok: true as const };
 }
 
-export async function GET(req: NextRequest, ctx: { params: { sessionId: string } }) {
+export async function GET(req: NextRequest, ctx: any) {
+  const params = (await ctx?.params) ?? ctx?.params ?? {};
   try {
     const auth = await requireOwner(req);
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });

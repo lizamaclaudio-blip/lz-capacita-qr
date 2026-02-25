@@ -1,20 +1,27 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import styles from "./page.module.css";
 
-type PdfRow = {
+type SessionRow = {
   id: string;
   code: string;
-  topic: string | null;
-  session_date: string | null;
-  trainer_name: string | null;
-  pdf_path: string;
-  pdf_generated_at: string | null;
-  companies?: { name: string; address: string | null } | null;
+  topic?: string | null;
+  location?: string | null;
+  trainer_name?: string | null;
+  session_date?: string | null;
+  status?: string | null;
+  closed_at?: string | null;
+
+  pdf_path?: string | null;
+  pdf_generated_at?: string | null;
+
+  company?: { name?: string | null } | null;
 };
+
+type SortKey = "newest" | "oldest" | "az";
 
 function fmtCL(iso?: string | null) {
   if (!iso) return "—";
@@ -25,192 +32,269 @@ function fmtCL(iso?: string | null) {
   }
 }
 
+async function fetchWithToken<T>(url: string): Promise<T> {
+  const { data } = await supabaseBrowser.auth.getSession();
+  const token = data.session?.access_token;
+
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((json as any)?.error || "Error al cargar");
+  return json as T;
+}
+
+async function postWithToken<T>(url: string, body: any): Promise<T> {
+  const { data } = await supabaseBrowser.auth.getSession();
+  const token = data.session?.access_token;
+
+  const res = await fetch(url, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((json as any)?.error || "Error");
+  return json as T;
+}
+
 export default function PdfsPage() {
-  const router = useRouter();
-
   const [loading, setLoading] = useState(true);
-  const [items, setItems] = useState<PdfRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const [q, setQ] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  async function getTokenOrRedirect() {
-    const { data } = await supabaseBrowser.auth.getSession();
-    const token = data.session?.access_token;
-    if (!token) {
-      router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
-      return null;
-    }
-    return token;
-  }
+  const [rows, setRows] = useState<SessionRow[]>([]);
+
+  // UI
+  const [q, setQ] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("newest");
 
   async function load() {
     setLoading(true);
-    setError(null);
+    setErr(null);
 
-    const token = await getTokenOrRedirect();
-    if (!token) return;
-
-    const res = await fetch("/api/app/pdfs", {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-
-    const json = await res.json().catch(() => null);
-    if (!res.ok) {
-      setItems([]);
-      setError(json?.error || "No se pudieron cargar los PDF");
+    try {
+      // ✅ Usamos tu endpoint existente de sesiones y filtramos las que tienen pdf_path
+      const s = await fetchWithToken<{ sessions?: SessionRow[] }>("/api/app/sessions");
+      const list = Array.isArray(s.sessions) ? s.sessions : [];
+      setRows(list.filter((x) => !!x.pdf_path));
+    } catch (e: any) {
+      setRows([]);
+      setErr(e?.message || "No se pudieron cargar los PDFs");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setItems(json?.pdfs ?? []);
-    setLoading(false);
   }
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function signAndOpen(pdf_path: string) {
-    const token = await getTokenOrRedirect();
-    if (!token) return;
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    let list = [...rows];
 
-    setToast("Abriendo PDF…");
-    try {
-      const res = await fetch("/api/app/pdfs/sign", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ pdf_path }),
+    if (term) {
+      list = list.filter((r) => {
+        const hay = [
+          r.code,
+          r.topic,
+          r.location,
+          r.trainer_name,
+          r.company?.name,
+          r.pdf_path,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(term);
       });
-
-      const json = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(json?.error || "No se pudo abrir");
-
-      window.open(json.signed_url, "_blank", "noopener,noreferrer");
-      setToast("PDF abierto ✅");
-      setTimeout(() => setToast(null), 1200);
-    } catch (e: any) {
-      setToast(e?.message || "Error PDF");
-      setTimeout(() => setToast(null), 2200);
     }
-  }
+
+    list.sort((a, b) => {
+      if (sortKey === "az") {
+        const an = (a.topic ?? a.code ?? "").toLowerCase();
+        const bn = (b.topic ?? b.code ?? "").toLowerCase();
+        return an.localeCompare(bn);
+      }
+
+      const ad = new Date(a.pdf_generated_at ?? a.closed_at ?? a.session_date ?? 0).getTime();
+      const bd = new Date(b.pdf_generated_at ?? b.closed_at ?? b.session_date ?? 0).getTime();
+
+      if (sortKey === "oldest") return ad - bd;
+      return bd - ad;
+    });
+
+    return list;
+  }, [rows, q, sortKey]);
+
+  const countLabel = useMemo(() => {
+    if (loading) return "Cargando…";
+    if (!q) return `${rows.length} PDF(s)`;
+    return `${filtered.length} de ${rows.length}`;
+  }, [loading, rows.length, filtered.length, q]);
 
   async function copy(text: string, msg = "Copiado ✅") {
     try {
       await navigator.clipboard.writeText(text);
-      setToast(msg);
-      setTimeout(() => setToast(null), 1200);
+      setNotice(msg);
+      setTimeout(() => setNotice(null), 1400);
     } catch {
-      setToast("No se pudo copiar 😕");
-      setTimeout(() => setToast(null), 1800);
+      setNotice("No se pudo copiar 😕");
+      setTimeout(() => setNotice(null), 1400);
     }
   }
 
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    if (!term) return items;
-
-    return items.filter((x) => {
-      const company = x.companies?.name ?? "";
-      const topic = x.topic ?? "";
-      const code = x.code ?? "";
-      const trainer = x.trainer_name ?? "";
-      return (
-        company.toLowerCase().includes(term) ||
-        topic.toLowerCase().includes(term) ||
-        code.toLowerCase().includes(term) ||
-        trainer.toLowerCase().includes(term)
-      );
-    });
-  }, [items, q]);
+  async function openPdf(pdf_path: string) {
+    setErr(null);
+    try {
+      const res = await postWithToken<{ ok: boolean; signed_url: string }>("/api/app/pdfs/sign", { pdf_path });
+      if (!res?.signed_url) throw new Error("No recibí URL firmada");
+      window.open(res.signed_url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      setErr(e?.message || "No se pudo abrir el PDF");
+    }
+  }
 
   return (
     <div className={styles.page}>
+      {/* Header */}
       <div className={styles.head}>
         <div>
-          <div className={styles.title}>Mis PDF</div>
-          <div className={styles.sub}>Documentos generados y firmados.</div>
+          <div className={styles.kicker}>PDFs</div>
+          <h1 className={styles.h1}>Reportes PDF</h1>
+          <p className={styles.sub}>Accede a los PDFs finales generados desde el Admin de cada charla.</p>
         </div>
 
-        <div className={styles.actionsTop}>
-          <button className={styles.secondary} onClick={() => router.push("/app/sessions")} type="button">
-            📋 Mis charlas
-          </button>
-          <button className={styles.primary} onClick={load} disabled={loading} type="button">
-            {loading ? "Cargando…" : "Actualizar"}
+        <div className={styles.headActions}>
+          <div className={styles.counter}>{countLabel}</div>
+          <button className="btn btnGhost" type="button" onClick={load}>
+            Actualizar
           </button>
         </div>
       </div>
 
-      {error && <div className={styles.error}>{error}</div>}
+      {err ? <div className={styles.errBox}>{err}</div> : null}
+      {notice ? <div className={styles.okBox}>{notice}</div> : null}
 
+      {/* Toolbar */}
       <div className={styles.toolbar}>
-        <input
-          className={styles.search}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por empresa, tema, código o relator…"
-        />
-        {toast && <div className={styles.toast}>{toast}</div>}
+        <div className={styles.searchWrap}>
+          <span className={styles.searchIcon}>⌕</span>
+          <input
+            className={styles.searchInput}
+            placeholder="Buscar por código, tema, empresa, relator…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+          {q ? (
+            <button className={styles.clearBtn} type="button" onClick={() => setQ("")} aria-label="Limpiar búsqueda">
+              ✕
+            </button>
+          ) : null}
+        </div>
+
+        <div className={styles.filters}>
+          <select className={styles.select} value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
+            <option value="newest">Más recientes</option>
+            <option value="oldest">Más antiguos</option>
+            <option value="az">A–Z</option>
+          </select>
+        </div>
       </div>
 
-      <div className={styles.listCard}>
-        {loading ? (
-          <div className={styles.muted}>Cargando…</div>
-        ) : !filtered.length ? (
-          <div className={styles.muted}>Aún no hay PDFs generados.</div>
-        ) : (
-          <div className={styles.rows}>
-            {filtered.map((p) => (
-              <div key={p.id} className={styles.row}>
-                <div className={styles.rowMain}>
-                  <div className={styles.rowTopLine}>
-                    <span className={styles.topic}>{p.topic || "(Sin tema)"}</span>
-                    <span className={styles.badge}>PDF</span>
+      {/* Content */}
+      {loading ? (
+        <div className={styles.stateCard}>Cargando PDFs…</div>
+      ) : filtered.length === 0 ? (
+        <div className={styles.stateCard}>
+          {rows.length === 0 ? (
+            <>
+              Aún no tienes PDFs. Genera uno desde el Admin de una charla ✅{" "}
+              <Link className={styles.inlineLink} href="/app/sessions">
+                Ir a charlas
+              </Link>
+            </>
+          ) : (
+            <>No hay resultados con tu búsqueda.</>
+          )}
+        </div>
+      ) : (
+        <div className={styles.grid}>
+          {filtered.map((r) => {
+            const code = (r.code || "").toUpperCase();
+            const companyName = r.company?.name ?? "Empresa";
+            const when = r.pdf_generated_at ?? r.closed_at ?? r.session_date ?? null;
+
+            const isClosed = (r.status || "").toLowerCase() === "closed" || !!r.closed_at;
+
+            return (
+              <div key={r.id} className={styles.card}>
+                <div className={styles.cardHead}>
+                  <div className={styles.titleRow}>
+                    <span className={`${styles.pill} ${isClosed ? styles.pillClosed : styles.pillOpen}`}>
+                      {isClosed ? "🔒 Cerrada" : "🟢 Abierta"}
+                    </span>
+                    <span className={styles.code}>#{code}</span>
                   </div>
 
+                  <div className={styles.topic}>{r.topic || "Charla"}</div>
                   <div className={styles.meta}>
-                    <span className={styles.mono}>{String(p.code ?? "").toUpperCase()}</span>
-                    <span className={styles.dot}>•</span>
-                    <span>{p.companies?.name ?? "—"}</span>
-                    <span className={styles.dot}>•</span>
-                    <span>{p.trainer_name ?? "—"}</span>
-                    <span className={styles.dot}>•</span>
-                    <span>Generado: {fmtCL(p.pdf_generated_at)}</span>
+                    {companyName} · {r.location || "—"}
+                  </div>
+                  <div className={styles.meta}>
+                    Relator: {r.trainer_name || "—"} · PDF: {fmtCL(when)}
                   </div>
                 </div>
 
-                <div className={styles.rowActions}>
-                  <button className={styles.btnPdf} onClick={() => signAndOpen(p.pdf_path)} type="button">
-                    Abrir PDF
+                <div className={styles.actions}>
+                  <button
+                    type="button"
+                    className={styles.smallBtn}
+                    onClick={() => copy(code, "Código copiado ✅")}
+                    title="Copiar código"
+                  >
+                    📎 Código
                   </button>
 
                   <button
-                    className={styles.btnThin}
-                    onClick={() => copy(p.pdf_path, "Ruta PDF copiada ✅")}
                     type="button"
+                    className={styles.smallBtn}
+                    onClick={() => copy(`/admin/s/${code}`, "Link admin copiado ✅")}
+                    title="Copiar link admin"
                   >
-                    Copiar ruta
+                    📎 Admin
                   </button>
 
                   <button
-                    className={styles.btnDark}
-                    onClick={() => router.push(`/admin/s/${encodeURIComponent(String(p.code).toUpperCase())}`)}
                     type="button"
+                    className={styles.smallBtnCta}
+                    onClick={() => openPdf(String(r.pdf_path))}
+                    title="Abrir PDF"
                   >
-                    Admin
+                    🧾 Abrir PDF
                   </button>
+
+                  <Link className={styles.smallBtnPrimary} href={`/admin/s/${code}`}>
+                    Ir a Admin →
+                  </Link>
+                </div>
+
+                <div className={styles.hint}>
+                  Nota: el PDF se genera/actualiza en Admin con el <b>passcode (RUT relator)</b>.
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

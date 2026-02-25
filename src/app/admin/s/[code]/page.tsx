@@ -6,6 +6,34 @@ import styles from "./page.module.css";
 import { SignaturePad, type SignaturePadRef } from "@/components/SignaturePad";
 import { cleanRut, isValidRut } from "@/lib/rut";
 
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(query).matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const m = window.matchMedia(query);
+
+    const onChange = () => setMatches(!!m.matches);
+    onChange();
+
+    // Safari < 14
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anyM: any = m as any;
+    if (typeof anyM.addEventListener === "function") {
+      anyM.addEventListener("change", onChange);
+      return () => anyM.removeEventListener("change", onChange);
+    }
+
+    m.addListener(onChange);
+    return () => m.removeListener(onChange);
+  }, [query]);
+
+  return matches;
+}
+
 type CompanyInfo = {
   id?: string;
   name?: string | null;
@@ -34,7 +62,6 @@ type AdminSession = {
   pdf_path?: string | null;
   pdf_generated_at?: string | null;
   company: CompanyInfo | null;
-  attendees?: Attendee[];
 };
 
 function fmtCL(iso?: string | null) {
@@ -67,11 +94,36 @@ export default function AdminSessionPage() {
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
 
-  // cierre / pdf
-  const [rutPass, setRutPass] = useState(""); // passcode (rut relator)
+  // RUT relator (passcode)
+  const [rutPass, setRutPass] = useState("");
   const [closing, setClosing] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+
+  // ✅ Desktop = panel fijo a la derecha | Mobile = bottom sheet
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  useEffect(() => {
+    if (isDesktop) setSheetOpen(false);
+  }, [isDesktop]);
+
+  useEffect(() => {
+    if (!sheetOpen) return;
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSheetOpen(false);
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [sheetOpen]);
 
   const isClosed = useMemo(() => {
     const st = (session?.status ?? "").toLowerCase();
@@ -97,24 +149,18 @@ export default function AdminSessionPage() {
       setTimeout(() => setOk(null), 1400);
     } catch {
       setError("No se pudo copiar (permiso del navegador).");
+      setTimeout(() => setError(null), 1800);
     }
   }
 
-  async function loadSession() {
+  async function loadSessionMeta() {
     setLoading(true);
     setError(null);
     setOk(null);
     setPdfUrl(null);
 
-    // Intento admin session (si existe)
-    let res = await fetch(`/api/admin/session?code=${encodeURIComponent(code)}`, { cache: "no-store" });
-    let json = await res.json().catch(() => null);
-
-    // Fallback: public session
-    if (!res.ok) {
-      res = await fetch(`/api/public/session?code=${encodeURIComponent(code)}`, { cache: "no-store" });
-      json = await res.json().catch(() => null);
-    }
+    const res = await fetch(`/api/public/session?code=${encodeURIComponent(code)}`, { cache: "no-store" });
+    const json = await res.json().catch(() => null);
 
     if (!res.ok) {
       setSession(null);
@@ -124,27 +170,55 @@ export default function AdminSessionPage() {
       return;
     }
 
-    const s = json?.session ?? null;
+    setSession(json?.session ?? null);
+    setLoading(false);
+  }
 
-    // Si el endpoint admin no entrega attendees, intentamos otro endpoint si lo tienes:
-    // /api/admin/attendees?code=
-    let aList: Attendee[] = s?.attendees ?? [];
-    if (!Array.isArray(aList) || aList.length === 0) {
-      const aRes = await fetch(`/api/admin/attendees?code=${encodeURIComponent(code)}`, { cache: "no-store" });
-      const aJson = await aRes.json().catch(() => null);
-      if (aRes.ok && Array.isArray(aJson?.attendees)) aList = aJson.attendees;
+  async function loadAttendees() {
+    // Solo si hay passcode válido
+    const rutClean = cleanRut(rutPass.trim());
+    if (!rutClean || !isValidRut(rutClean)) {
+      setAttendees([]);
+      return;
     }
 
-    setSession(s);
-    setAttendees(Array.isArray(aList) ? aList : []);
-    setLoading(false);
+    const aRes = await fetch(
+      `/api/admin/attendees?code=${encodeURIComponent(code)}&passcode=${encodeURIComponent(rutClean)}`,
+      { cache: "no-store" }
+    );
+
+    const aJson = await aRes.json().catch(() => null);
+
+    if (!aRes.ok) {
+      // No “rompemos” la página, solo mostramos el error arriba
+      setAttendees([]);
+      setError(aJson?.error || "No se pudieron cargar asistentes");
+      return;
+    }
+
+    setAttendees(Array.isArray(aJson?.attendees) ? aJson.attendees : []);
+  }
+
+  async function refreshAll() {
+    await loadSessionMeta();
+    await loadAttendees();
   }
 
   useEffect(() => {
     if (!code) return;
-    loadSession();
+    loadSessionMeta();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
+
+  // Debounce: al escribir passcode, intenta traer asistentes
+  useEffect(() => {
+    if (!code) return;
+    const t = window.setTimeout(() => {
+      loadAttendees();
+    }, 350);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rutPass, code]);
 
   async function closeSession() {
     setError(null);
@@ -175,8 +249,8 @@ export default function AdminSessionPage() {
     setClosing(true);
 
     try {
-      // Endpoint de cierre (ajustable)
-      const res = await fetch("/api/admin/close", {
+      // ✅ Endpoint correcto
+      const res = await fetch("/api/admin/close-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -191,7 +265,7 @@ export default function AdminSessionPage() {
 
       setOk("✅ Charla cerrada.");
       sigRef.current?.clear();
-      await loadSession();
+      await refreshAll();
     } catch (e: any) {
       setError(e?.message || "Error al cerrar");
     } finally {
@@ -224,13 +298,103 @@ export default function AdminSessionPage() {
 
       setPdfUrl(json?.signed_url ?? null);
       setOk("✅ PDF generado.");
-      await loadSession();
+      await refreshAll();
     } catch (e: any) {
       setError(e?.message || "Error al generar PDF");
     } finally {
       setPdfLoading(false);
     }
   }
+
+  const RightPanel = (
+    <>
+      <div className={styles.blockTitle}>Empresa y charla</div>
+      <div className={styles.blockSub}>Para validar antes de cerrar</div>
+
+      <div className={styles.companyBox}>
+        <div className={styles.companyRow}>
+          <div className={styles.companyLogo}>
+            {companyLogo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={companyLogo} alt="Logo empresa" />
+            ) : (
+              <div className={styles.companyFallback}>🏢</div>
+            )}
+          </div>
+
+          <div className={styles.companyText}>
+            <div className={styles.companyName}>{session?.company?.name ?? "Empresa"}</div>
+            <div className={styles.companyMeta}>
+              {session?.company?.rut ? `RUT: ${session.company.rut}` : "RUT: —"}{" "}
+              {session?.company?.address ? `· ${session.company.address}` : ""}
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.infoGrid}>
+          <div className={styles.infoCard}>
+            <div className={styles.infoLabel}>Fecha charla</div>
+            <div className={styles.infoValue}>{fmtCL(session?.session_date)}</div>
+          </div>
+          <div className={styles.infoCard}>
+            <div className={styles.infoLabel}>Relator</div>
+            <div className={styles.infoValue}>{session?.trainer_name ?? "—"}</div>
+          </div>
+          <div className={styles.infoCard}>
+            <div className={styles.infoLabel}>Lugar</div>
+            <div className={styles.infoValue}>{session?.location ?? "—"}</div>
+          </div>
+          <div className={styles.infoCard}>
+            <div className={styles.infoLabel}>Cerrada</div>
+            <div className={styles.infoValue}>{session?.closed_at ? fmtCL(session.closed_at) : "—"}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.blockTitle}>RUT relator (passcode)</div>
+        <div className={styles.blockSub}>Se usa para ver asistentes, cerrar y generar el PDF.</div>
+
+        <input
+          className="input"
+          placeholder="Ej: 12.345.678-9"
+          value={rutPass}
+          onChange={(e) => setRutPass(e.target.value)}
+        />
+      </div>
+
+      <div className={styles.section}>
+        <div className={styles.blockTitle}>Firma del relator</div>
+        <div className={styles.blockSub}>Obligatoria para cerrar la charla.</div>
+
+        <div className={styles.sigWrap}>
+          <SignaturePad ref={sigRef} height={210} />
+        </div>
+
+        <div className={styles.actionsRow}>
+          <button className="btn" type="button" onClick={() => sigRef.current?.clear()}>
+            Limpiar firma
+          </button>
+
+          <button className="btn btnPrimary" type="button" onClick={closeSession} disabled={closing || isClosed}>
+            {isClosed ? "Cerrada" : closing ? "Cerrando..." : "Cerrar charla"}
+          </button>
+
+          <button className="btn btnCta" type="button" onClick={generatePdf} disabled={pdfLoading}>
+            {pdfLoading ? "Generando..." : "Generar PDF"}
+          </button>
+        </div>
+
+        {pdfUrl ? (
+          <div className={styles.pdfRow}>
+            <a className="btn btnPrimary" href={pdfUrl} target="_blank" rel="noreferrer">
+              Abrir PDF final ↗
+            </a>
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
 
   return (
     <div className={styles.page}>
@@ -255,13 +419,13 @@ export default function AdminSessionPage() {
               <button className="btn" type="button" onClick={() => copy(adminLink)}>
                 📎 Copiar link Admin
               </button>
-              <button className="btn btnPrimary" type="button" onClick={loadSession} disabled={loading}>
+              <button className="btn btnPrimary" type="button" onClick={refreshAll} disabled={loading}>
                 {loading ? "Actualizando..." : "Actualizar"}
               </button>
             </div>
           </div>
 
-          <div className={styles.badges} style={{ marginTop: 10 }}>
+          <div className={styles.badges}>
             <span className={`${styles.pill} ${isClosed ? styles.pillWarn : styles.pillOk}`}>
               {isClosed ? "🔒 Cerrada" : "🟢 Abierta"}
             </span>
@@ -269,163 +433,99 @@ export default function AdminSessionPage() {
             {session?.topic ? <span className={styles.pill}>🎯 {session.topic}</span> : null}
           </div>
 
-          {error && <div className={styles.msgErr}>{error}</div>}
-          {ok && <div className={styles.msgOk}>{ok}</div>}
-        </div>
+          {error && <div className={styles.toastErr}>{error}</div>}
+          {ok && <div className={styles.toastOk}>{ok}</div>}
 
-        <div className={styles.grid2}>
-          <div className={`glass card`}>
-            <div style={{ fontWeight: 950, fontSize: 16 }}>Asistentes</div>
-            <div style={{ fontSize: 12, opacity: 0.72, fontWeight: 800, marginTop: 2 }}>
-              Lista registrada por QR
-            </div>
+          <div className={styles.layout}>
+            {/* Asistentes (principal) */}
+            <div className={styles.main}>
+              <div className={`glass card ${styles.col}`}>
+                <div className={styles.blockTitle}>Asistentes</div>
+                <div className={styles.blockSub}>Lista registrada por QR</div>
 
-            <div style={{ marginTop: 12 }} className={styles.tableWrap}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Nombre</th>
-                    <th>RUT</th>
-                    <th>Cargo</th>
-                    <th>Hora</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {attendees.length === 0 ? (
-                    <tr>
-                      <td className={styles.emptyCell} colSpan={5}>
-                        Aún no hay asistentes registrados.
-                      </td>
-                    </tr>
-                  ) : (
-                    attendees.map((a, idx) => (
-                      <tr key={`${a.rut}-${idx}`}>
-                        <td>{idx + 1}</td>
-                        <td>{a.full_name}</td>
-                        <td>{a.rut}</td>
-                        <td>{a.role ?? "-"}</td>
-                        <td>{fmtCL(a.created_at)}</td>
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Nombre</th>
+                        <th>RUT</th>
+                        <th>Cargo</th>
+                        <th>Hora</th>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody>
+                      {attendees.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className={styles.emptyCell}>
+                            {cleanRut(rutPass.trim())
+                              ? "Aún no hay asistentes registrados."
+                              : "Ingresa RUT relator para ver asistentes."}
+                          </td>
+                        </tr>
+                      ) : (
+                        attendees.map((a, i) => (
+                          <tr key={`${a.rut}-${a.created_at}`}>
+                            <td>{i + 1}</td>
+                            <td>{a.full_name}</td>
+                            <td>{a.rut}</td>
+                            <td>{a.role ?? "—"}</td>
+                            <td>{fmtCL(a.created_at)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
+
+            {/* Desktop: panel derecho */}
+            {isDesktop ? (
+              <aside className={styles.aside}>
+                <div className={`glass card ${styles.sidePanel}`}>{RightPanel}</div>
+              </aside>
+            ) : (
+              <>
+                {/* Mobile: dock */}
+                <div className={`glass ${styles.dock}`}>
+                  <div className={styles.dockLeft}>
+                    <span className={`${styles.dockPill} ${isClosed ? styles.dockPillWarn : styles.dockPillOk}`}>
+                      {isClosed ? "🔒 Cerrada" : "🟢 Abierta"}
+                    </span>
+                    <span className={styles.dockMeta}>👥 {attendees.length}</span>
+                  </div>
+
+                  <button type="button" className="btn btnPrimary" onClick={() => setSheetOpen(true)}>
+                    Panel
+                  </button>
+                </div>
+
+                {/* Mobile: bottom sheet */}
+                <div
+                  className={`${styles.backdrop} ${sheetOpen ? styles.backdropOpen : ""}`}
+                  onClick={() => setSheetOpen(false)}
+                />
+
+                <div
+                  className={`glass ${styles.sheet} ${sheetOpen ? styles.sheetOpen : ""}`}
+                  role="dialog"
+                  aria-modal="true"
+                  aria-label="Panel de cierre"
+                >
+                  <div className={styles.sheetHeader}>
+                    <div className={styles.sheetHandle} />
+                    <div className={styles.sheetTitle}>Empresa · Cierre</div>
+                    <button type="button" className={styles.sheetClose} onClick={() => setSheetOpen(false)}>
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className={styles.sheetBody}>{RightPanel}</div>
+                </div>
+              </>
+            )}
           </div>
-
-          <div className={`glass card`}>
-            <div style={{ fontWeight: 950, fontSize: 16 }}>Empresa y charla</div>
-            <div style={{ fontSize: 12, opacity: 0.72, fontWeight: 800, marginTop: 2 }}>
-              Para validar antes de cerrar
-            </div>
-
-            <div className={styles.infoBox} style={{ marginTop: 12 }}>
-              <div className={styles.companyRow}>
-                <div className={styles.companyLogo}>
-                  {companyLogo ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={companyLogo} alt="Logo empresa" />
-                  ) : (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src="/brand/lz-capacita-qr.png"
-                      alt="LZ"
-                      style={{ width: "100%", height: "100%", objectFit: "contain", padding: 12, opacity: 0.85 }}
-                    />
-                  )}
-                </div>
-
-                <div style={{ minWidth: 0 }}>
-                  <div className={styles.companyName}>{session?.company?.name ?? "Empresa"}</div>
-                  <div className={styles.companyMeta}>
-                    {session?.company?.legal_name ? `Razón social: ${session.company.legal_name}` : ""}
-                  </div>
-                  <div className={styles.companyMeta}>
-                    {session?.company?.rut ? `RUT: ${session.company.rut}` : ""}{" "}
-                    {session?.company?.address ? `· ${session.company.address}` : ""}
-                  </div>
-                </div>
-              </div>
-
-              <div className={styles.kpis}>
-                <div className={styles.kpi}>
-                  <div className={styles.kpiLabel}>Fecha charla</div>
-                  <div className={styles.kpiValue} style={{ fontSize: 14, marginTop: 6 }}>
-                    {fmtCL(session?.session_date)}
-                  </div>
-                </div>
-
-                <div className={styles.kpi}>
-                  <div className={styles.kpiLabel}>Relator</div>
-                  <div className={styles.kpiValue} style={{ fontSize: 14, marginTop: 6 }}>
-                    {session?.trainer_name ?? "—"}
-                  </div>
-                </div>
-
-                <div className={styles.kpi}>
-                  <div className={styles.kpiLabel}>Lugar</div>
-                  <div className={styles.kpiValue} style={{ fontSize: 14, marginTop: 6 }}>
-                    {session?.location ?? "—"}
-                  </div>
-                </div>
-
-                <div className={styles.kpi}>
-                  <div className={styles.kpiLabel}>Cerrada</div>
-                  <div className={styles.kpiValue} style={{ fontSize: 14, marginTop: 6 }}>
-                    {fmtCL(session?.closed_at)}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontWeight: 950 }}>RUT relator (passcode)</div>
-              <div style={{ fontSize: 12, opacity: 0.72, fontWeight: 800, marginTop: 2 }}>
-                Se usa para cerrar y generar el PDF.
-              </div>
-              <input
-                className="input"
-                value={rutPass}
-                onChange={(e) => setRutPass(e.target.value)}
-                placeholder="Ej: 12.345.678-9"
-                style={{ marginTop: 8 }}
-              />
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <div style={{ fontWeight: 950 }}>Firma del relator</div>
-              <div className={styles.sigWrap} style={{ marginTop: 8 }}>
-                <SignaturePad ref={sigRef} height={220} />
-              </div>
-
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end", marginTop: 10 }}>
-                <button className="btn" type="button" onClick={() => sigRef.current?.clear()} disabled={closing}>
-                  Limpiar
-                </button>
-
-                <button className="btn btnPrimary" type="button" onClick={closeSession} disabled={closing || isClosed}>
-                  {closing ? "Cerrando..." : isClosed ? "Cerrada" : "Cerrar charla"}
-                </button>
-
-                <button className="btn btnCta" type="button" onClick={generatePdf} disabled={pdfLoading || !isClosed}>
-                  {pdfLoading ? "Generando..." : "Generar PDF"}
-                </button>
-              </div>
-
-              {pdfUrl && (
-                <div style={{ marginTop: 10 }}>
-                  <a className="btn btnCta" href={pdfUrl} target="_blank" rel="noreferrer">
-                    📄 Abrir PDF
-                  </a>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className={`glass card`} style={{ fontSize: 12, opacity: 0.72, fontWeight: 800 }}>
-          Tip: el PDF incluye el logo de la empresa si fue cargado en “Mis empresas”. 👌
         </div>
       </div>
     </div>

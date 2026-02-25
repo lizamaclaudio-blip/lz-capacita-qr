@@ -11,9 +11,15 @@ type Company = {
   name: string;
   address: string | null;
   created_at: string;
-  // opcional (si después lo agregas en DB/API)
   logo_url?: string | null;
 };
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isUuid(v: unknown) {
+  return typeof v === "string" && UUID_RE.test(v.trim());
+}
 
 function fmtCL(iso: string) {
   try {
@@ -77,7 +83,6 @@ export default function AppHome() {
 
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // form
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
 
@@ -94,6 +99,15 @@ export default function AppHome() {
       return null;
     }
     return token;
+  }
+
+  function openCompany(companyId: unknown) {
+    const id = typeof companyId === "string" ? companyId.trim() : "";
+    if (!isUuid(id)) {
+      setError("⚠️ No pude abrir la empresa (ID inválido). Actualiza e intenta nuevamente.");
+      return;
+    }
+    router.push(`/app/company/${id}`);
   }
 
   async function load() {
@@ -130,7 +144,9 @@ export default function AppHome() {
       return;
     }
 
-    setCompanies(json?.companies ?? []);
+    // ✅ filtro fuerte para evitar id undefined
+    const list: Company[] = (json?.companies ?? []).filter((c: any) => c?.id && isUuid(c.id));
+    setCompanies(list);
     setLoading(false);
   }
 
@@ -240,13 +256,7 @@ export default function AppHome() {
 
         <div className={styles.heroRight}>
           <div className={styles.logoCard}>
-            <Image
-              src="/registro-logo.png"
-              alt="LZ Capacita QR"
-              width={260}
-              height={72}
-              priority
-            />
+            <Image src="/registro-logo.png" alt="LZ Capacita QR" width={260} height={72} priority />
             <div className={styles.logoHint}>Charlas y Capacitaciones</div>
           </div>
         </div>
@@ -325,14 +335,13 @@ export default function AppHome() {
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => router.push(`/app/company/${c.id}`)}
+                  onClick={() => openCompany(c.id)}
                   className={styles.companyCard}
                   title="Abrir empresa"
                 >
                   <div className={styles.companyTop}>
                     <div className={styles.avatar}>
                       {c.logo_url ? (
-                        // por ahora solo si existe; si no, letra
                         <Image src={c.logo_url} alt={c.name} width={36} height={36} />
                       ) : (
                         <span>{letter}</span>
@@ -341,16 +350,12 @@ export default function AppHome() {
 
                     <div className={styles.companyInfo}>
                       <div className={styles.companyName}>{c.name}</div>
-                      <div className={styles.companyMeta}>
-                        {c.address || "Sin dirección"}
-                      </div>
+                      <div className={styles.companyMeta}>{c.address || "Sin dirección"}</div>
                     </div>
                   </div>
 
                   <div className={styles.companyBottom}>
-                    <div className={styles.companyMeta}>
-                      Creada: {fmtCL(c.created_at)}
-                    </div>
+                    <div className={styles.companyMeta}>Creada: {fmtCL(c.created_at)}</div>
                     <div className={styles.openHint}>Abrir →</div>
                   </div>
                 </button>

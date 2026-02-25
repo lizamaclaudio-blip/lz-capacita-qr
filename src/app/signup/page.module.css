@@ -1,0 +1,256 @@
+/* mismo “auth split” que login, pero con grid más alto */
+
+.page {
+  min-height: 100vh;
+  padding: 18px;
+  display: grid;
+  place-items: center;
+}
+
+.grid {
+  width: min(1180px, 100%);
+  display: grid;
+  grid-template-columns: 1.05fr 0.95fr;
+  gap: 18px;
+  align-items: stretch;
+}
+
+@media (max-width: 980px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.left {
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(var(--ink), 0.10);
+  background: rgba(255,255,255,.58);
+  box-shadow: var(--shadow-md);
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.brandRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  border: 1px solid rgba(var(--ink), 0.10);
+  background: rgba(255,255,255,.75);
+  padding: 8px;
+  object-fit: contain;
+  box-shadow: var(--shadow-sm);
+}
+
+.brandText {
+  display: grid;
+  gap: 2px;
+}
+
+.brandTitle {
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+  font-weight: 950;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+}
+
+.brandSub {
+  font-weight: 800;
+  font-size: 12px;
+  opacity: .72;
+}
+
+.h1 {
+  margin: 10px 0 0;
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+  font-weight: 900;
+  font-size: clamp(28px, 3.2vw, 44px);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+}
+
+.h1Strong {
+  background: linear-gradient(90deg, rgba(var(--brand-indigo), 1), rgba(var(--brand-teal), 1));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.p {
+  margin: 0;
+  color: var(--text-muted);
+  font-weight: 650;
+  line-height: 1.6;
+  max-width: 62ch;
+}
+
+.bullets {
+  margin-top: 8px;
+  display: grid;
+  gap: 10px;
+}
+
+.bullet {
+  border-radius: 999px;
+  padding: 9px 12px;
+  border: 1px solid rgba(var(--ink), 0.10);
+  background: rgba(255,255,255,.55);
+  box-shadow: var(--shadow-sm);
+  font-weight: 850;
+  font-size: 12px;
+  opacity: .86;
+}
+
+.miniCta {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.foot {
+  margin-top: auto;
+  font-size: 12px;
+  font-weight: 800;
+  opacity: .65;
+}
+
+.right {
+  display: grid;
+  place-items: center;
+  padding: 10px 0;
+}
+
+.card {
+  width: min(560px, 100%);
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(var(--ink), 0.10);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  padding: 20px;
+}
+
+.cardHead {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.cardTitle {
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
+  font-weight: 950;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.cardSub {
+  font-weight: 650;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.errBox {
+  margin-top: 12px;
+  border-radius: 16px;
+  padding: 12px;
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  background: rgba(239, 68, 68, 0.10);
+  font-weight: 850;
+  color: rgba(127, 29, 29, 0.95);
+  font-size: 13px;
+}
+
+.okBox {
+  margin-top: 12px;
+  border-radius: 16px;
+  padding: 12px;
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  background: rgba(16, 185, 129, 0.10);
+  font-weight: 850;
+  color: rgba(6, 95, 70, 0.95);
+  font-size: 13px;
+}
+
+.form {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 900;
+  opacity: .72;
+}
+
+.hint {
+  font-size: 11px;
+  font-weight: 850;
+  opacity: .62;
+  margin-top: 2px;
+}
+
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.row3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .row2 { grid-template-columns: 1fr; }
+  .row3 { grid-template-columns: 1fr; }
+}
+
+.actionsRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.alt {
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-muted);
+}
+
+.link {
+  font-weight: 950;
+  text-decoration: underline;
+  color: rgba(var(--brand-indigo), 1);
+}
+
+.mobileFoot {
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 800;
+  opacity: .65;
+  display: none;
+}
+
+@media (max-width: 980px) {
+  .left { order: 2; }
+  .right { order: 1; }
+  .foot { display: none; }
+  .mobileFoot { display: block; }
+}

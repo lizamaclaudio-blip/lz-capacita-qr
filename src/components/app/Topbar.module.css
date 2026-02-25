@@ -1,29 +1,93 @@
 .topbar {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
   border-radius: var(--radius-xl);
   padding: 12px 14px;
-  box-shadow: var(--shadow-md);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 14px;
+  overflow: hidden;
+  position: relative;
+
+  /* ✅ Dark premium tipo sidebar */
+  background:
+    radial-gradient(800px 380px at 15% 0%, rgba(var(--brand-indigo), 0.22), transparent 60%),
+    radial-gradient(800px 380px at 85% 10%, rgba(var(--brand-teal), 0.16), transparent 60%),
+    radial-gradient(800px 420px at 50% 120%, rgba(var(--brand-amber), 0.12), transparent 60%),
+    linear-gradient(180deg, rgba(11, 18, 32, 0.92) 0%, rgba(8, 14, 26, 0.965) 70%, rgba(6, 10, 18, 0.985) 100%);
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* shine suave */
+.topbar::before {
+  content: "";
+  position: absolute;
+  inset: -40px -80px auto -80px;
+  height: 120px;
+  transform: rotate(-8deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.10), transparent);
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* halo holográfico MUY leve */
+.topbar::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  background:
+    conic-gradient(
+      from 180deg,
+      rgba(var(--brand-indigo), 0.0),
+      rgba(var(--brand-indigo), 0.18),
+      rgba(var(--brand-teal), 0.16),
+      rgba(var(--brand-amber), 0.16),
+      rgba(var(--brand-indigo), 0.0)
+    );
+  mix-blend-mode: screen;
+  filter: blur(20px);
+  opacity: 0.35;
+  animation: holoShift 8.5s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .left {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
+  position: relative;
+  z-index: 1;
 }
 
-.titleRow {
+.brandPill {
+  width: 170px;
+  height: 54px;
+  border-radius: 18px;
+  padding: 8px 10px;
+  overflow: hidden;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+.brandLogo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, 0.22));
+}
+
+.greetingBlock {
   min-width: 0;
 }
 
@@ -31,18 +95,24 @@
   font-weight: 950;
   font-size: 18px;
   line-height: 1.1;
+  color: rgba(255, 255, 255, 0.95);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.subtitle {
-  font-size: 12px;
-  opacity: 0.75;
-  font-weight: 800;
+.right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  position: relative;
+  z-index: 1;
 }
 
-.right {
+/* fecha+hora en una sola línea, grande */
+.infoRow {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -50,43 +120,149 @@
   justify-content: flex-end;
 }
 
-.datetime {
-  text-align: right;
-  line-height: 1.1;
-}
-
-.time {
+.dateTime {
   font-weight: 950;
-  font-size: 14px;
-}
-
-.date {
-  font-size: 12px;
-  opacity: 0.7;
-  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.2px;
+  color: rgba(255, 255, 255, 0.92);
   text-transform: capitalize;
-}
-
-.email {
-  font-size: 12px;
-  opacity: 0.75;
-  font-weight: 800;
   white-space: nowrap;
 }
 
-/* solo spacing para botones (estilo lo pone .btn global) */
-.ownerBtn {
-  text-decoration: none;
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 14px 28px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
 
-.logoutBtn {
-  color: white;
-  background: rgba(11, 18, 32, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.18);
+.emailPill {
+  color: rgba(255, 255, 255, 0.85);
 }
+
+.weather {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.weatherIcon {
+  font-size: 14px;
+  transform: translateY(-0.5px);
+}
+
+.weatherLabel {
+  opacity: 0.85;
+  font-weight: 900;
+}
+
+.weatherPlace {
+  opacity: 0.75;
+  font-weight: 850;
+  margin-left: 4px;
+}
+
+.weatherDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(var(--brand-teal), 1);
+  box-shadow: 0 0 14px rgba(var(--brand-teal), 0.35);
+}
+
+.weather[data-state="loading"] {
+  position: relative;
+  overflow: hidden;
+}
+.weather[data-state="loading"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.10), transparent);
+  transform: translateX(-120%);
+  animation: shimmer 1.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.weather[data-state="off"] .weatherDot {
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: none;
+}
+.weather[data-state="error"] .weatherDot {
+  background: rgba(var(--brand-amber), 1);
+  box-shadow: 0 0 14px rgba(var(--brand-amber), 0.35);
+}
+
+.pillText {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btnRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* botones con look sidebar */
+.btn {
+  border-radius: 16px;
+  padding: 10px 12px;
+  font-weight: 950;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  transition: transform 0.10s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+.btn:active { transform: translateY(1px); }
+
+.btnOwner {
+  color: white;
+  background: linear-gradient(135deg, rgba(var(--brand-indigo), 1), rgba(var(--brand-teal), 1));
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 34px rgba(79, 70, 229, 0.20);
+}
+.btnOwner:hover { opacity: 0.96; }
+
+.btnLogout {
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(0, 0, 0, 0.22);
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.22);
+}
+.btnLogout:hover { opacity: 0.96; }
 
 .logoutIcon {
   width: 18px;
   height: 18px;
+}
+
+@keyframes shimmer {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+
+@keyframes holoShift {
+  0%   { transform: translate3d(-12%, -8%, 0) rotate(-8deg); opacity: 0.28; }
+  50%  { transform: translate3d(8%, 6%, 0) rotate(10deg);  opacity: 0.42; }
+  100% { transform: translate3d(-6%, 10%, 0) rotate(-4deg); opacity: 0.34; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topbar::after,
+  .weather[data-state="loading"]::after {
+    animation: none !important;
+  }
 }

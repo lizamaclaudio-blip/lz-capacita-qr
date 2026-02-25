@@ -1,30 +1,44 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import { cleanRut, isValidRut } from "@/lib/rut";
+import {
+  cleanRut,
+  isValidRut,
+  formatRutChile,
+  normalizeRutInput,
+} from "@/lib/rut";
+import styles from "./page.module.css";
 
-type Meta = {
-  full_name?: string;
-  first_name?: string;
-  last_name?: string;
-  rut?: string;
-  address?: string;
-  phone?: string;
-  region?: string;
-  comuna?: string;
-  city?: string;
+type UserMeta = {
+  full_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  rut?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  region?: string | null;
+  comuna?: string | null;
+  city?: string | null;
 };
+
+function toStr(v: unknown) {
+  return typeof v === "string" ? v : "";
+}
 
 export default function ProfilePage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [email, setEmail] = useState("");
-  const [userId, setUserId] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
 
+  const [email, setEmail] = useState<string>("");
+
+  // Metadata (perfil)
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [rut, setRut] = useState("");
@@ -34,88 +48,85 @@ export default function ProfilePage() {
   const [comuna, setComuna] = useState("");
   const [city, setCity] = useState("");
 
-  const [saving, setSaving] = useState(false);
+  // Security: change password
+  const [pw1, setPw1] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwOk, setPwOk] = useState<string | null>(null);
+  const [pwErr, setPwErr] = useState<string | null>(null);
 
-  const [newPassword, setNewPassword] = useState("");
-  const [savingPass, setSavingPass] = useState(false);
-  const [showPass, setShowPass] = useState(false);
-
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const lastLoadedEmail = useRef<string>("");
 
   const fullName = useMemo(() => {
     const f = firstName.trim();
     const l = lastName.trim();
-    return `${f} ${l}`.trim();
+    const built = `${f} ${l}`.trim();
+    return built || "";
   }, [firstName, lastName]);
 
+  async function loadUser() {
+    setLoading(true);
+    setErr(null);
+    setOk(null);
+
+    const { data: sessionData } = await supabaseBrowser.auth.getSession();
+    if (!sessionData.session) {
+      router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
+      return;
+    }
+
+    const { data, error } = await supabaseBrowser.auth.getUser();
+    if (error || !data.user) {
+      router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
+      return;
+    }
+
+    const user = data.user;
+    const md = (user.user_metadata ?? {}) as UserMeta;
+
+    const userEmail = user.email ?? "";
+    setEmail(userEmail);
+    lastLoadedEmail.current = userEmail;
+
+    setFirstName(toStr(md.first_name));
+    setLastName(toStr(md.last_name));
+
+    // guardamos rut “limpio” pero mostramos formateado
+    const r = toStr(md.rut);
+    setRut(r ? formatRutChile(r) : "");
+
+    setAddress(toStr(md.address));
+    setPhone(toStr(md.phone));
+    setRegion(toStr(md.region));
+    setComuna(toStr(md.comuna));
+    setCity(toStr(md.city));
+
+    setLoading(false);
+  }
+
   useEffect(() => {
-    let alive = true;
+    loadUser();
 
-    (async () => {
-      setLoading(true);
-      setErr(null);
-      setMsg(null);
-
-      const { data, error } = await supabaseBrowser.auth.getUser();
-      if (!alive) return;
-
-      if (error) {
-        setErr(error.message);
-        setLoading(false);
-        return;
+    const { data: sub } = supabaseBrowser.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        router.replace("/login?e=" + encodeURIComponent("Sesión expirada. Vuelve a ingresar."));
       }
+    });
 
-      const u = data.user;
-      if (!u) {
-        router.replace("/login");
-        return;
-      }
+    return () => sub?.subscription?.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-      setUserId(u.id);
-      setEmail(u.email ?? "");
-
-      const md = (u.user_metadata ?? {}) as Meta;
-
-      setFirstName((md.first_name ?? "").toString());
-      setLastName((md.last_name ?? "").toString());
-      setRut((md.rut ?? "").toString());
-      setAddress((md.address ?? "").toString());
-      setPhone((md.phone ?? "").toString());
-      setRegion((md.region ?? "").toString());
-      setComuna((md.comuna ?? "").toString());
-      setCity((md.city ?? "").toString());
-
-      // Si venías con full_name antiguo pero no first/last, hacemos fallback inteligente
-      const fallbackFull = (md.full_name ?? "").toString().trim();
-      if ((!md.first_name || !md.last_name) && fallbackFull && (!md.first_name && !md.last_name)) {
-        const parts = fallbackFull.split(" ").filter(Boolean);
-        if (parts.length >= 2) {
-          setFirstName(parts.slice(0, -1).join(" "));
-          setLastName(parts.slice(-1).join(" "));
-        } else if (parts.length === 1) {
-          setFirstName(parts[0] || "");
-        }
-      }
-
-      setLoading(false);
-    })();
-
-    return () => {
-      alive = false;
-    };
-  }, [router]);
-
-  function validate() {
+  function validateProfile() {
     const f = firstName.trim();
     const l = lastName.trim();
     if (!f) return "Ingresa tus nombres.";
     if (!l) return "Ingresa tus apellidos.";
 
-    const rutRaw = rut.trim();
-    const rutClean = cleanRut(rutRaw);
-    if (!rutRaw) return "Ingresa tu RUT.";
-    if (!isValidRut(rutClean)) return "RUT inválido (dígito verificador incorrecto).";
+    const rInput = rut.trim();
+    const rClean = cleanRut(rInput);
+    if (!rInput) return "Ingresa tu RUT.";
+    if (!isValidRut(rClean)) return "RUT inválido (dígito verificador incorrecto).";
 
     const addr = address.trim();
     if (!addr) return "Ingresa tu dirección.";
@@ -134,230 +145,258 @@ export default function ProfilePage() {
     return null;
   }
 
-  async function saveProfile() {
+  async function saveProfile(e: React.FormEvent) {
+    e.preventDefault();
     setErr(null);
-    setMsg(null);
+    setOk(null);
 
-    const v = validate();
+    const v = validateProfile();
     if (v) {
       setErr(v);
       return;
     }
 
-    const rutClean = cleanRut(rut.trim());
-
     setSaving(true);
 
-    const { error } = await supabaseBrowser.auth.updateUser({
-      data: {
-        // compat y saludo
-        full_name: fullName,
+    try {
+      const rClean = cleanRut(rut.trim());
+      const f = firstName.trim();
+      const l = lastName.trim();
+      const full_name = `${f} ${l}`.trim();
 
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        rut: rutClean,
+      const payload: UserMeta = {
+        full_name,
+        first_name: f,
+        last_name: l,
+        rut: rClean,
         address: address.trim(),
         phone: phone.trim(),
         region: region.trim(),
         comuna: comuna.trim(),
         city: city.trim(),
-      },
-    });
+      };
 
-    setSaving(false);
+      const { error } = await supabaseBrowser.auth.updateUser({
+        data: payload,
+      });
 
-    if (error) {
-      setErr(error.message);
-      return;
+      if (error) throw new Error(error.message);
+
+      // Mostrar rut formateado
+      setRut(formatRutChile(rClean));
+
+      setOk("✅ Perfil actualizado.");
+      window.setTimeout(() => setOk(null), 1600);
+    } catch (e: any) {
+      setErr(e?.message || "No se pudo actualizar el perfil");
+    } finally {
+      setSaving(false);
     }
-
-    setMsg("✅ Perfil actualizado.");
   }
 
-  async function changePassword() {
-    setErr(null);
-    setMsg(null);
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwErr(null);
+    setPwOk(null);
 
-    if (!newPassword || newPassword.length < 6) {
-      setErr("La contraseña debe tener al menos 6 caracteres.");
+    const a = pw1.trim();
+    const b = pw2.trim();
+    if (!a || a.length < 6) {
+      setPwErr("La nueva contraseña debe tener al menos 6 caracteres.");
+      return;
+    }
+    if (a !== b) {
+      setPwErr("Las contraseñas no coinciden.");
       return;
     }
 
-    setSavingPass(true);
+    setPwSaving(true);
+    try {
+      const { error } = await supabaseBrowser.auth.updateUser({ password: a });
+      if (error) throw new Error(error.message);
 
-    const { error } = await supabaseBrowser.auth.updateUser({
-      password: newPassword,
-    });
-
-    setSavingPass(false);
-
-    if (error) {
-      setErr(error.message);
-      return;
+      setPwOk("✅ Contraseña actualizada.");
+      setPw1("");
+      setPw2("");
+      window.setTimeout(() => setPwOk(null), 1600);
+    } catch (e: any) {
+      setPwErr(e?.message || "No se pudo actualizar la contraseña");
+    } finally {
+      setPwSaving(false);
     }
+  }
 
-    setNewPassword("");
-    setMsg("✅ Contraseña actualizada.");
+  if (loading) {
+    return <div className={styles.loading}>Cargando perfil…</div>;
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4">
+    <div className={styles.page}>
       {/* Header */}
-      <div className="glass card flex items-start justify-between gap-4">
+      <div className={styles.head}>
         <div>
-          <div className="text-2xl font-black">Mi perfil</div>
-          <div className="text-sm opacity-70 font-extrabold">
-            Edita tus datos. El email es solo lectura.
-          </div>
+          <div className={styles.kicker}>Perfil</div>
+          <h1 className={styles.h1}>Mi cuenta</h1>
+          <p className={styles.sub}>
+            Aquí están los mismos datos que se piden al registrarse. Se usan para trazabilidad y auditoría.
+          </p>
         </div>
 
-        <button type="button" className="btn" onClick={() => router.push("/app")}>
-          ← Volver
-        </button>
+        <div className={styles.headActions}>
+          <button className="btn btnGhost" type="button" onClick={loadUser}>
+            Recargar
+          </button>
+        </div>
       </div>
 
-      {(err || msg) && (
-        <div
-          className={`glass card ${
-            err ? "border border-red-200/70 bg-red-50/60" : "border border-emerald-200/70 bg-emerald-50/60"
-          }`}
-        >
-          <div className={`text-sm font-extrabold ${err ? "text-red-700" : "text-emerald-800"}`}>
-            {err ? err : msg}
-          </div>
-        </div>
-      )}
+      {err ? <div className={styles.errBox}>{err}</div> : null}
+      {ok ? <div className={styles.okBox}>{ok}</div> : null}
 
-      {loading ? (
-        <div className="glass card">
-          <div className="opacity-70 font-extrabold">Cargando…</div>
-        </div>
-      ) : (
-        <>
-          {/* Datos cuenta */}
-          <div className="glass card">
-            <div className="text-lg font-black">Datos de cuenta</div>
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Email</label>
-                <input className="input mt-1 opacity-80" value={email} disabled />
+      <div className={styles.grid}>
+        {/* Profile form */}
+        <section className={styles.card}>
+          <div className={styles.cardHead}>
+            <div>
+              <div className={styles.cardTitle}>Datos personales</div>
+              <div className={styles.cardSub}>Actualiza tus datos (se guardan en tu usuario).</div>
+            </div>
+            <div className={styles.emailPill}>📩 {email || lastLoadedEmail.current}</div>
+          </div>
+
+          <form className={styles.form} onSubmit={saveProfile}>
+            <div className={styles.row2}>
+              <div className={styles.field}>
+                <label className={styles.label}>Nombres</label>
+                <input
+                  className="input"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  required
+                />
               </div>
-              <div>
-                <label className="text-xs font-extrabold opacity-70">ID usuario</label>
-                <input className="input mt-1 opacity-80" value={userId} disabled />
+
+              <div className={styles.field}>
+                <label className={styles.label}>Apellidos</label>
+                <input
+                  className="input"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  required
+                />
               </div>
             </div>
-          </div>
 
-          {/* Datos personales */}
-          <div className="glass card">
-            <div className="text-lg font-black">Datos personales</div>
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Nombres</label>
-                <input className="input mt-1" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Apellidos</label>
-                <input className="input mt-1" value={lastName} onChange={(e) => setLastName(e.target.value)} />
-              </div>
-
-              <div>
-                <label className="text-xs font-extrabold opacity-70">RUT</label>
+            <div className={styles.row2}>
+              <div className={styles.field}>
+                <label className={styles.label}>RUT</label>
                 <input
-                  className="input mt-1"
-                  placeholder="12.345.678-5"
+                  className="input"
+                  placeholder="12345678-5"
                   value={rut}
-                  onChange={(e) => setRut(e.target.value)}
+                  onChange={(e) => setRut(normalizeRutInput(e.target.value))}
+                  onBlur={() => setRut(formatRutChile(rut))}
+                  required
                 />
-                <div className="mt-1 text-[11px] font-extrabold opacity-60">
-                  Se valida el dígito verificador.
-                </div>
+                <div className={styles.hint}>Formato Chile: XXXXXXXX-X. Validamos DV.</div>
               </div>
 
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Teléfono</label>
+              <div className={styles.field}>
+                <label className={styles.label}>Teléfono</label>
                 <input
-                  className="input mt-1"
+                  className="input"
                   placeholder="+56 9 1234 5678"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
+                  inputMode="tel"
+                  required
                 />
               </div>
+            </div>
 
-              <div className="sm:col-span-2">
-                <label className="text-xs font-extrabold opacity-70">Dirección</label>
-                <input className="input mt-1" value={address} onChange={(e) => setAddress(e.target.value)} />
-              </div>
+            <div className={styles.field}>
+              <label className={styles.label}>Dirección</label>
+              <input
+                className="input"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                required
+              />
+            </div>
 
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Región</label>
-                <input className="input mt-1" value={region} onChange={(e) => setRegion(e.target.value)} />
+            <div className={styles.row3}>
+              <div className={styles.field}>
+                <label className={styles.label}>Región</label>
+                <input className="input" value={region} onChange={(e) => setRegion(e.target.value)} required />
               </div>
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Comuna</label>
-                <input className="input mt-1" value={comuna} onChange={(e) => setComuna(e.target.value)} />
+              <div className={styles.field}>
+                <label className={styles.label}>Comuna</label>
+                <input className="input" value={comuna} onChange={(e) => setComuna(e.target.value)} required />
               </div>
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Ciudad</label>
-                <input className="input mt-1" value={city} onChange={(e) => setCity(e.target.value)} />
+              <div className={styles.field}>
+                <label className={styles.label}>Ciudad</label>
+                <input className="input" value={city} onChange={(e) => setCity(e.target.value)} required />
               </div>
             </div>
 
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button type="button" className="btn btnPrimary" onClick={saveProfile} disabled={saving}>
-                {saving ? "Guardando…" : "Guardar perfil"}
+            <div className={styles.actions}>
+              <div className={styles.namePreview}>
+                Nombre completo: <b>{fullName || "—"}</b>
+              </div>
+
+              <button className="btn btnCta" type="submit" disabled={saving}>
+                {saving ? "Guardando..." : "Guardar cambios"}
               </button>
+            </div>
+          </form>
+        </section>
 
-              <div className="text-xs font-extrabold opacity-60">
-                Se guarda en <span className="font-black">user_metadata</span>.
-              </div>
+        {/* Security */}
+        <section className={styles.card}>
+          <div className={styles.cardHead}>
+            <div>
+              <div className={styles.cardTitle}>Seguridad</div>
+              <div className={styles.cardSub}>Cambiar contraseña (opcional).</div>
             </div>
           </div>
 
-          {/* Seguridad */}
-          <div className="glass card">
-            <div className="text-lg font-black">Seguridad</div>
+          {pwErr ? <div className={styles.errBox}>{pwErr}</div> : null}
+          {pwOk ? <div className={styles.okBox}>{pwOk}</div> : null}
 
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <label className="text-xs font-extrabold opacity-70">Nueva contraseña</label>
-                <div className="mt-1 flex gap-2">
-                  <input
-                    className="input"
-                    type={showPass ? "text" : "password"}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Mínimo 6 caracteres"
-                  />
-                  <button
-                    type="button"
-                    className="btn"
-                    style={{
-                      padding: "10px 12px",
-                      border: "1px solid rgba(15,23,42,.12)",
-                      background: "rgba(255,255,255,.65)",
-                    }}
-                    onClick={() => setShowPass((v) => !v)}
-                  >
-                    {showPass ? "🙈" : "👁️"}
-                  </button>
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <button type="button" className="btn btnCta" onClick={changePassword} disabled={savingPass}>
-                    {savingPass ? "Actualizando…" : "Actualizar contraseña"}
-                  </button>
-
-                  <div className="text-xs font-extrabold opacity-60">
-                    Esto actualiza tu contraseña en Supabase Auth.
-                  </div>
-                </div>
-              </div>
+          <form className={styles.form} onSubmit={changePassword}>
+            <div className={styles.field}>
+              <label className={styles.label}>Nueva contraseña</label>
+              <input
+                className="input"
+                type="password"
+                value={pw1}
+                onChange={(e) => setPw1(e.target.value)}
+                autoComplete="new-password"
+              />
             </div>
+
+            <div className={styles.field}>
+              <label className={styles.label}>Repite nueva contraseña</label>
+              <input
+                className="input"
+                type="password"
+                value={pw2}
+                onChange={(e) => setPw2(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div className={styles.actions}>
+              <button className="btn btnPrimary" type="submit" disabled={pwSaving}>
+                {pwSaving ? "Actualizando..." : "Actualizar contraseña"}
+              </button>
+            </div>
+          </form>
+
+          <div className={styles.note}>
+            Consejo: usa una contraseña fuerte. Si la cambias, tu sesión actual sigue válida.
           </div>
-        </>
-      )}
+        </section>
+      </div>
     </div>
   );
 }

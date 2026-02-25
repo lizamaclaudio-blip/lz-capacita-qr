@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { cleanRut, isValidRut } from "@/lib/rut";
 import { fileToDataUrl } from "@/lib/file";
+import styles from "./page.module.css";
 
 type Company = {
   id: string;
@@ -41,7 +42,7 @@ export default function CreateCompanyPage() {
   // Logo
   const [logoFile, setLogoFile] = useState<File | null>(null);
 
-  // Para sucursales: listamos empresas del usuario (idealmente HQ cuando DB tenga company_type)
+  // Para sucursales
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
 
@@ -90,8 +91,6 @@ export default function CreateCompanyPage() {
     }
 
     const list: Company[] = json?.companies ?? [];
-
-    // Si más adelante tienes company_type, filtramos HQ; si no, mostramos todas
     const hq = list.filter((c) => (c.company_type ? c.company_type === "hq" : true));
     setCompanies(hq);
   }
@@ -135,7 +134,6 @@ export default function CreateCompanyPage() {
   async function uploadLogoIfAny(token: string) {
     if (!logoFile) return null;
 
-    // Validación rápida client-side
     if (logoFile.size > 2_000_000) {
       throw new Error("Logo demasiado pesado (máx 2MB).");
     }
@@ -226,222 +224,231 @@ export default function CreateCompanyPage() {
   const noHq = companyType === "branch" && !loadingCompanies && companies.length === 0;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-4">
-      <div className="glass card flex items-start justify-between gap-4">
+    <div className={styles.page}>
+      <div className={styles.headCard}>
         <div>
-          <div className="text-2xl font-black">Crear empresa</div>
-          <div className="text-sm opacity-70 font-extrabold">
-            Razón social + RUT validado + logo. (Glass premium ✨)
-          </div>
+          <div className={styles.kicker}>Empresas</div>
+          <h1 className={styles.h1}>Crear empresa</h1>
+          <p className={styles.sub}>Razón social + RUT validado + logo (aparece en QR y PDF).</p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {email && <div className="text-xs font-extrabold opacity-60">{email}</div>}
-          <button type="button" className="btn" onClick={() => router.push("/app")}>
+        <div className={styles.headActions}>
+          {email ? <div className={styles.emailPill}>{email}</div> : null}
+          <button type="button" className="btn btnGhost" onClick={() => router.push("/app/companies")}>
             ← Volver
           </button>
         </div>
       </div>
 
-      {(error || ok) && (
-        <div
-          className={`glass card ${
-            error ? "border border-red-200/70 bg-red-50/60" : "border border-emerald-200/70 bg-emerald-50/60"
-          }`}
-        >
-          <div className={`text-sm font-extrabold ${error ? "text-red-700" : "text-emerald-800"}`}>
-            {error || ok}
-          </div>
+      {(error || ok) ? (
+        <div className={`${styles.alert} ${error ? styles.alertErr : styles.alertOk}`}>
+          {error || ok}
         </div>
-      )}
+      ) : null}
 
-      <div className="glass card">
-        <form onSubmit={createCompany} className="space-y-5">
-          {/* Tipo empresa */}
-          <div>
-            <div className="text-lg font-black">Tipo de empresa</div>
-            <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                className={`btn ${companyType === "hq" ? "btnPrimary" : ""}`}
-                style={companyType !== "hq" ? { background: "rgba(255,255,255,.65)", border: "1px solid rgba(15,23,42,.12)" } : undefined}
-                onClick={() => setCompanyType("hq")}
-              >
-                🏢 Casa matriz
-              </button>
+      <div className={styles.grid}>
+        <aside className={styles.aside}>
+          <div className={styles.asideTitle}>Checklist</div>
+          <div className={styles.asideItem}>✅ Nombre comercial</div>
+          <div className={styles.asideItem}>✅ Razón social</div>
+          <div className={styles.asideItem}>✅ RUT con DV válido</div>
+          <div className={styles.asideItem}>✅ Dirección</div>
+          <div className={styles.asideItem}>✅ Logo opcional (2MB)</div>
 
-              <button
-                type="button"
-                className={`btn ${companyType === "branch" ? "btnPrimary" : ""}`}
-                style={companyType !== "branch" ? { background: "rgba(255,255,255,.65)", border: "1px solid rgba(15,23,42,.12)" } : undefined}
-                onClick={() => setCompanyType("branch")}
-              >
-                📍 Sucursal
-              </button>
+          <div className={styles.asideNote}>
+            Tip: si creas una <b>Sucursal</b>, debes asociarla a una <b>Casa matriz</b>.
+          </div>
+        </aside>
+
+        <div className={styles.formCard}>
+          <form onSubmit={createCompany} className={styles.form}>
+            {/* Tipo empresa */}
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>Tipo de empresa</div>
+
+              <div className={styles.segment}>
+                <button
+                  type="button"
+                  className={`${styles.segBtn} ${companyType === "hq" ? styles.segActive : ""}`}
+                  onClick={() => setCompanyType("hq")}
+                >
+                  🏢 Casa matriz
+                </button>
+
+                <button
+                  type="button"
+                  className={`${styles.segBtn} ${companyType === "branch" ? styles.segActive : ""}`}
+                  onClick={() => setCompanyType("branch")}
+                >
+                  📍 Sucursal
+                </button>
+              </div>
+
+              {companyType === "branch" ? (
+                <div className={styles.field}>
+                  <label className={styles.label}>Casa matriz</label>
+                  <select
+                    className={`input ${styles.select}`}
+                    value={parentCompanyId}
+                    onChange={(e) => setParentCompanyId(e.target.value)}
+                    disabled={loadingCompanies}
+                  >
+                    <option value="">{loadingCompanies ? "Cargando..." : "Selecciona casa matriz"}</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.rut ? `(${c.rut})` : ""}
+                      </option>
+                    ))}
+                  </select>
+
+                  {noHq ? (
+                    <div className={styles.warn}>
+                      ⚠️ No tienes empresas para usar como casa matriz aún. Crea una casa matriz primero.
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
-            {companyType === "branch" && (
-              <div className="mt-3">
-                <label className="text-xs font-extrabold opacity-70">Casa matriz</label>
-                <select
-                  className="input mt-1"
-                  value={parentCompanyId}
-                  onChange={(e) => setParentCompanyId(e.target.value)}
-                  disabled={loadingCompanies}
-                >
-                  <option value="">{loadingCompanies ? "Cargando..." : "Selecciona casa matriz"}</option>
-                  {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} {c.rut ? `(${c.rut})` : ""}
-                    </option>
-                  ))}
-                </select>
+            {/* Datos empresa */}
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>Datos de la empresa</div>
 
-                {noHq && (
-                  <div className="mt-2 text-sm font-extrabold text-amber-800">
-                    ⚠️ No tienes empresas para usar como casa matriz aún. Crea una casa matriz primero.
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+              <div className={styles.row2}>
+                <div className={styles.field}>
+                  <label className={styles.label}>Nombre comercial</label>
+                  <input
+                    className="input"
+                    placeholder="Ej: Automotora Berríos"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                  />
+                </div>
 
-          {/* Datos empresa */}
-          <div>
-            <div className="text-lg font-black">Datos de la empresa</div>
-
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Nombre comercial</label>
-                <input
-                  className="input mt-1"
-                  placeholder="Ej: Automotora Berríos"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Razón social</label>
-                <input
-                  className="input mt-1"
-                  placeholder="Ej: Automotora Berríos SpA"
-                  value={legalName}
-                  onChange={(e) => setLegalName(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-extrabold opacity-70">RUT empresa</label>
-                <input
-                  className="input mt-1"
-                  placeholder="Ej: 76.123.456-7"
-                  value={rut}
-                  onChange={(e) => setRut(e.target.value)}
-                  required
-                />
-                <div className="mt-1 text-[11px] font-extrabold opacity-60">
-                  Se valida el dígito verificador.
+                <div className={styles.field}>
+                  <label className={styles.label}>Razón social</label>
+                  <input
+                    className="input"
+                    placeholder="Ej: Automotora Berríos SpA"
+                    value={legalName}
+                    onChange={(e) => setLegalName(e.target.value)}
+                    required
+                  />
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Dirección</label>
-                <input
-                  className="input mt-1"
-                  placeholder="Ej: Puerto Montt"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  required
-                />
+              <div className={styles.row2}>
+                <div className={styles.field}>
+                  <label className={styles.label}>RUT empresa</label>
+                  <input
+                    className="input"
+                    placeholder="Ej: 76.123.456-7"
+                    value={rut}
+                    onChange={(e) => setRut(e.target.value)}
+                    required
+                  />
+                  <div className={styles.hint}>Se valida el dígito verificador.</div>
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>Dirección</label>
+                  <input
+                    className="input"
+                    placeholder="Ej: Puerto Montt"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    required
+                  />
+                </div>
               </div>
 
-              <div className="sm:col-span-2">
-                <label className="text-xs font-extrabold opacity-70">Logo (PNG/JPG, máx 2MB)</label>
+              <div className={styles.field}>
+                <label className={styles.label}>Logo (PNG/JPG, máx 2MB)</label>
                 <input
-                  className="input mt-1"
+                  className={`input ${styles.file}`}
                   type="file"
                   accept="image/png,image/jpeg,image/jpg"
                   onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
                 />
 
-                {logoPreview && (
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className="h-16 w-28 rounded-2xl overflow-hidden border border-white/30 bg-white/60">
+                {logoPreview ? (
+                  <div className={styles.logoPreviewRow}>
+                    <div className={styles.logoPreviewBox}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={logoPreview} alt="logo preview" className="h-full w-full object-contain p-2" />
+                      <img src={logoPreview} alt="logo preview" className={styles.logoPreviewImg} />
                     </div>
-                    <div className="text-xs font-extrabold opacity-70">
-                      Preview del logo. Se guardará y aparecerá en Mis empresas, QR y PDF.
+                    <div className={styles.logoPreviewText}>
+                      Preview del logo. Se verá en Mis empresas, QR y PDF.
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
-          </div>
 
-          {/* Contacto */}
-          <div>
-            <div className="text-lg font-black">Contacto principal (opcional)</div>
+            {/* Contacto */}
+            <div className={styles.section}>
+              <div className={styles.sectionTitle}>Contacto principal (opcional)</div>
 
-            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Nombre contacto</label>
-                <input
-                  className="input mt-1"
-                  placeholder="Ej: Juan Pérez"
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
-                />
+              <div className={styles.row2}>
+                <div className={styles.field}>
+                  <label className={styles.label}>Nombre contacto</label>
+                  <input
+                    className="input"
+                    placeholder="Ej: Juan Pérez"
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                  />
+                </div>
+
+                <div className={styles.field}>
+                  <label className={styles.label}>RUT contacto</label>
+                  <input
+                    className="input"
+                    placeholder="Ej: 12.345.678-9"
+                    value={contactRut}
+                    onChange={(e) => setContactRut(e.target.value)}
+                  />
+                </div>
               </div>
 
-              <div>
-                <label className="text-xs font-extrabold opacity-70">RUT contacto</label>
-                <input
-                  className="input mt-1"
-                  placeholder="Ej: 12.345.678-9"
-                  value={contactRut}
-                  onChange={(e) => setContactRut(e.target.value)}
-                />
-              </div>
+              <div className={styles.row2}>
+                <div className={styles.field}>
+                  <label className={styles.label}>Email contacto</label>
+                  <input
+                    className="input"
+                    placeholder="Ej: contacto@empresa.cl"
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    inputMode="email"
+                  />
+                </div>
 
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Email contacto</label>
-                <input
-                  className="input mt-1"
-                  placeholder="Ej: contacto@empresa.cl"
-                  value={contactEmail}
-                  onChange={(e) => setContactEmail(e.target.value)}
-                  inputMode="email"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-extrabold opacity-70">Teléfono contacto</label>
-                <input
-                  className="input mt-1"
-                  placeholder="Ej: +56 9 1234 5678"
-                  value={contactPhone}
-                  onChange={(e) => setContactPhone(e.target.value)}
-                  inputMode="tel"
-                />
+                <div className={styles.field}>
+                  <label className={styles.label}>Teléfono contacto</label>
+                  <input
+                    className="input"
+                    placeholder="Ej: +56 9 1234 5678"
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    inputMode="tel"
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Acciones */}
-          <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-            <button type="button" className="btn" onClick={() => router.push("/app")}>
-              Cancelar
-            </button>
+            {/* Acciones */}
+            <div className={styles.actions}>
+              <button type="button" className="btn btnGhost" onClick={() => router.push("/app/companies")}>
+                Cancelar
+              </button>
 
-            <button type="submit" className="btn btnCta" disabled={saving}>
-              {saving ? "Guardando..." : "Guardar empresa"}
-            </button>
-          </div>
-        </form>
+              <button type="submit" className="btn btnCta" disabled={saving}>
+                {saving ? "Guardando..." : "Guardar empresa"}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

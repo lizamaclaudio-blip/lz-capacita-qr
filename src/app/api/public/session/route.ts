@@ -1,57 +1,56 @@
-export const runtime = "nodejs";
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+
 export const dynamic = "force-dynamic";
 
-import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
-
-async function fetchSession(sb: any, code: string, full: boolean) {
-  const selectFull =
-    "id, code, topic, location, session_date, trainer_name, status, closed_at, companies(id,name,legal_name,rut,address,logo_path,company_type,parent_company_id)";
-  const selectLite =
-    "id, code, topic, location, session_date, trainer_name, status, closed_at, companies(id,name,address)";
-
-  return sb
-    .from("sessions")
-    .select(full ? selectFull : selectLite)
-    .ilike("code", code) // ✅ case-insensitive exact match
-    .single();
+function bad(msg: string, status = 400) {
+  return NextResponse.json({ error: msg }, { status });
 }
 
 export async function GET(req: NextRequest) {
   try {
-    const code = (req.nextUrl.searchParams.get("code") || "").trim().toUpperCase();
-    if (!code) return NextResponse.json({ error: "Missing code" }, { status: 400 });
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const service = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    if (!url || !service) return bad("Missing env vars", 500);
 
-    const sb = supabaseServer();
+    const code = new URL(req.url).searchParams.get("code")?.trim().toUpperCase() || "";
+    if (!code) return bad("code is required", 400);
 
-    // 1) Intento completo (incluye logo_path + legal_name + rut + company_type)
-    let { data: session, error } = await fetchSession(sb, code, true);
+    const sb = createClient(url, service, { auth: { persistSession: false } });
 
-    // 2) Si falla por columnas faltantes, reintento “lite”
-    if (error && /Could not find the '.*' column/i.test(error.message)) {
-      const retry = await fetchSession(sb, code, false);
-      session = retry.data as any;
-      error = retry.error as any;
+    const { data: session, error } = await sb
+      .from("sessions")
+      .select("id, code, topic, location, session_date, trainer_name, status, closed_at, company_id")
+      .eq("code", code)
+      .maybeSingle();
+
+    if (error) return bad(error.message, 400);
+    if (!session) return bad("Session not found", 404);
+
+    // company minimal info
+    let company: any = null;
+    if (session.company_id) {
+      const { data: c } = await sb
+        .from("companies")
+        .select("id, name, logo_path")
+        .eq("id", session.company_id)
+        .maybeSingle();
+      company = c ?? null;
     }
 
-    if (error || !session) return NextResponse.json({ error: "Charla no existe" }, { status: 404 });
-
-    const company = Array.isArray((session as any).companies)
-      ? (session as any).companies[0]
-      : (session as any).companies;
-
     return NextResponse.json({
+      ok: true,
       session: {
         id: session.id,
         code: session.code,
-        topic: session.topic,
-        location: session.location,
-        session_date: session.session_date,
-        trainer_name: session.trainer_name,
-        status: session.status,
-        closed_at: session.closed_at,
-        company: company ?? null,
+        topic: session.topic ?? null,
+        location: session.location ?? null,
+        session_date: session.session_date ?? null,
+        trainer_name: session.trainer_name ?? null,
+        status: session.status ?? null,
+        closed_at: session.closed_at ?? null,
       },
+      company,
     });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });

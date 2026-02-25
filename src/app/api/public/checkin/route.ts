@@ -1,126 +1,104 @@
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-import { NextResponse } from "next/server";
-import { z } from "zod";
-import { nanoid } from "nanoid";
-import { supabaseServer } from "@/lib/supabase/server";
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { cleanRut, isValidRut } from "@/lib/rut";
 
-const BodySchema = z.object({
-  code: z.string().min(3),
-  full_name: z.string().min(3),
-  rut: z.string().min(6),
-  role: z.string().optional().nullable(),
-  signature_data_url: z.string().min(50),
-});
+export const dynamic = "force-dynamic";
 
-function isPngHeader(buf: Buffer) {
-  if (buf.length < 8) return false;
-  const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-  return buf.subarray(0, 8).equals(pngHeader);
+function bad(msg: string, status = 400) {
+  return NextResponse.json({ error: msg }, { status });
 }
 
-export async function POST(req: Request) {
+function parseDataUrlPng(dataUrl: string) {
+  const m = String(dataUrl || "").match(/^data:image\/(png);base64,(.+)$/i);
+  if (!m) return null;
+  const b64 = m[2] || "";
+  if (!b64 || b64.length < 50) return null; // evita "vacío"
+  const buf = Buffer.from(b64, "base64");
+  if (!buf || buf.length < 200) return null;
+  return buf;
+}
+
+export async function POST(req: NextRequest) {
   try {
-    const json = await req.json().catch(() => null);
-    const parsed = BodySchema.safeParse(json);
-    if (!parsed.success) return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const service = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    if (!url || !service) return bad("Missing env vars", 500);
 
-    const code = parsed.data.code.trim().toUpperCase();
-    const full_name = parsed.data.full_name.trim();
-    const rutClean = cleanRut(parsed.data.rut);
-    const role = parsed.data.role ? String(parsed.data.role).trim() : null;
+    const body = await req.json().catch(() => null);
+    if (!body) return bad("Invalid JSON body", 400);
 
-    if (!code) return NextResponse.json({ error: "Código inválido" }, { status: 400 });
-    if (!full_name || full_name.length < 3) {
-      return NextResponse.json({ error: "Nombre inválido" }, { status: 400 });
-    }
+    const code = String(body.code || "").trim().toUpperCase();
+    const full_name = String(body.full_name || body.name || "").trim();
+    const role = String(body.role || body.cargo || "").trim();
+    const rutInput = String(body.rut || "").trim();
+    const signature = String(body.signature || body.signature_data_url || "").trim();
 
-    if (!rutClean || !isValidRut(rutClean)) {
-      return NextResponse.json({ error: "RUT inválido (dígito verificador incorrecto)" }, { status: 400 });
-    }
+    if (!code) return bad("code is required", 400);
+    if (!full_name) return bad("full_name is required", 400);
+    if (!rutInput) return bad("rut is required", 400);
+    if (!role) return bad("role is required", 400);
+    if (!signature) return bad("signature is required", 400);
 
-    // Firma: debe ser PNG dataURL
-    const sig = parsed.data.signature_data_url;
-    const m = sig.match(/^data:image\/png;base64,(.+)$/i);
-    if (!m) {
-      return NextResponse.json({ error: "Firma inválida (formato). Firma debe ser PNG." }, { status: 400 });
-    }
+    const rut = cleanRut(rutInput);
+    if (!isValidRut(rut)) return bad("RUT inválido (DV incorrecto)", 400);
 
-    const b64 = m[1] || "";
-    if (!b64 || b64.length < 50) {
-      return NextResponse.json({ error: "Firma inválida (vacía)." }, { status: 400 });
-    }
+    const sb = createClient(url, service, { auth: { persistSession: false } });
 
-    // base64 puede ser grande; validamos buffer final
-    const buffer = Buffer.from(b64, "base64");
-    if (buffer.byteLength > 2_000_000) {
-      return NextResponse.json({ error: "Firma demasiado pesada (máx 2MB). Firma más pequeño." }, { status: 413 });
-    }
-
-    // Evitar firmas "vacías": png muy chico o header inválido
-    if (buffer.byteLength < 300) {
-      return NextResponse.json({ error: "Firma demasiado pequeña. Firma nuevamente." }, { status: 400 });
-    }
-    if (!isPngHeader(buffer)) {
-      return NextResponse.json({ error: "Firma inválida (archivo PNG corrupto)." }, { status: 400 });
-    }
-
-    const sb = supabaseServer();
-
-    // 1) Buscar sesión por code (case-insensitive)
     const { data: session, error: sErr } = await sb
       .from("sessions")
-      .select("id,status,code")
-      .ilike("code", code)
-      .single();
+      .select("id, code, status, closed_at, company_id")
+      .eq("code", code)
+      .maybeSingle();
 
-    if (sErr || !session) return NextResponse.json({ error: "Charla no existe" }, { status: 404 });
-    if (session.status !== "open") {
-      return NextResponse.json(
-        { error: "Esta charla está cerrada. No se puede registrar asistencia." },
-        { status: 409 }
-      );
-    }
+    if (sErr) return bad(sErr.message, 400);
+    if (!session) return bad("Session not found", 404);
 
-    // 2) Evitar duplicado por RUT
-    const { data: existing } = await sb
+    const isClosed = (session.status || "").toLowerCase() === "closed" || !!session.closed_at;
+    if (isClosed) return bad("Session is closed", 409);
+
+    // Prevent duplicates by session_id + rut
+    const { data: existing, error: eErr } = await sb
       .from("attendees")
       .select("id")
       .eq("session_id", session.id)
-      .eq("rut", rutClean)
+      .eq("rut", rut)
       .maybeSingle();
 
-    if (existing?.id) {
-      return NextResponse.json({ error: "Este RUT ya fue registrado en esta charla." }, { status: 409 });
-    }
+    if (eErr) return bad(eErr.message, 400);
+    if (existing?.id) return bad("Already checked in", 409);
 
-    // 3) Upload firma
-    const filePath = `attendee-signatures/${session.code}/${rutClean}-${Date.now()}-${nanoid(6)}.png`;
+    const png = parseDataUrlPng(signature);
+    if (!png) return bad("Firma inválida o vacía (PNG base64)", 400);
 
-    const up = await sb.storage.from("assets").upload(filePath, buffer, {
+    const stamp = Date.now();
+    const rand = Math.random().toString(16).slice(2);
+    const path = `signatures/${session.id}/${rut}-${stamp}-${rand}.png`;
+
+    const { error: upErr } = await sb.storage.from("assets").upload(path, png, {
       contentType: "image/png",
       upsert: false,
     });
-    if (up.error) return NextResponse.json({ error: up.error.message }, { status: 500 });
 
-    // 4) Insert
-    const { data: ins, error: iErr } = await sb
+    if (upErr) return bad(upErr.message, 400);
+
+    const { data: attendee, error: insErr } = await sb
       .from("attendees")
       .insert({
         session_id: session.id,
+        rut,
         full_name,
-        rut: rutClean,
         role,
-        signature_path: filePath,
+        signature_path: path,
       })
-      .select("id,created_at")
-      .single();
+      .select("id, created_at, rut, full_name, role, signature_path")
+      .maybeSingle();
 
-    if (iErr) return NextResponse.json({ error: iErr.message }, { status: 500 });
+    if (insErr) return bad(insErr.message, 400);
 
-    return NextResponse.json({ ok: true, attendee: ins });
+    return NextResponse.json({
+      ok: true,
+      attendee,
+    });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }
