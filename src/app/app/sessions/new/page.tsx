@@ -1,28 +1,56 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import { cleanRut, isValidRut } from "@/lib/rut";
+import { cleanRut, isValidRut, formatRutChile, normalizeRutInput } from "@/lib/rut";
 import styles from "./page.module.css";
 
 type Company = {
   id: string;
   name: string | null;
   rut?: string | null;
+  legal_name?: string | null;
+  company_type?: string | null;
 };
 
 function toIsoLocal(dt: string) {
   try {
+    // "YYYY-MM-DDTHH:mm" (datetime-local) is parsed as local time in browsers.
     return new Date(dt).toISOString();
   } catch {
     return null;
   }
 }
 
-async function getToken() {
-  const { data } = await supabaseBrowser.auth.getSession();
-  return data.session?.access_token ?? null;
+async function sleep(ms: number) {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
+async function getTokenRobust() {
+  // Mitiga casos donde la sesión tarda en “hidratar” al navegar entre rutas.
+  for (let i = 0; i < 6; i++) {
+    const { data } = await supabaseBrowser.auth.getSession();
+    const token = data.session?.access_token ?? null;
+    if (token) return token;
+
+    try {
+      await supabaseBrowser.auth.refreshSession();
+    } catch {
+      // ignore
+    }
+
+    await sleep(180);
+  }
+  return null;
+}
+
+function pillStatusForRut(raw: string) {
+  const clean = cleanRut(raw || "");
+  if (!clean) return { label: "Chile", kind: "idle" as const };
+  if (clean.length < 8) return { label: "Chile", kind: "idle" as const };
+  return isValidRut(clean) ? { label: "DV OK", kind: "ok" as const } : { label: "DV inválido", kind: "bad" as const };
 }
 
 export default function NewSessionPage() {
@@ -47,6 +75,10 @@ export default function NewSessionPage() {
   const [sessionDate, setSessionDate] = useState("");
   const [passcodeRut, setPasscodeRut] = useState("");
 
+  const rutPill = useMemo(() => pillStatusForRut(passcodeRut), [passcodeRut]);
+
+  const selectedCompany = useMemo(() => companies.find((c) => c.id === companyId) || null, [companies, companyId]);
+
   const canSave = useMemo(() => {
     return !!companyId && !!topic.trim() && !!trainerName.trim() && !!sessionDate.trim();
   }, [companyId, topic, trainerName, sessionDate]);
@@ -58,13 +90,27 @@ export default function NewSessionPage() {
       setLoading(true);
       setErr(null);
 
-      const token = await getToken();
+      const token = await getTokenRobust();
       if (!token) {
-        router.replace("/login");
+        router.replace("/login?redirect=" + encodeURIComponent("/app/sessions/new"));
         return;
       }
 
       try {
+        // Prefill relator (desde perfil)
+        const { data: u } = await supabaseBrowser.auth.getUser();
+        if (alive && u.user) {
+          const md = (u.user.user_metadata ?? {}) as Record<string, any>;
+          const f = typeof md.first_name === "string" ? md.first_name.trim() : "";
+          const l = typeof md.last_name === "string" ? md.last_name.trim() : "";
+          const full = (typeof md.full_name === "string" && md.full_name.trim()) || `${f} ${l}`.trim();
+          if (!trainerName && full) setTrainerName(full);
+
+          const r = typeof md.rut === "string" ? md.rut.trim() : "";
+          if (!passcodeRut && r) setPasscodeRut(formatRutChile(r));
+        }
+
+        // Load companies
         const res = await fetch("/api/app/companies", {
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
@@ -78,13 +124,14 @@ export default function NewSessionPage() {
 
         setCompanies(list);
 
+        // Preselect company from query param if exists
         if (prefCompanyId && !companyId) {
           const exists = list.some((c) => c.id === prefCompanyId);
           if (exists) setCompanyId(prefCompanyId);
         }
       } catch (e: any) {
         if (!alive) return;
-        setErr(e?.message || "Error al cargar empresas");
+        setErr(e?.message || "Error al cargar");
       } finally {
         if (!alive) return;
         setLoading(false);
@@ -106,14 +153,15 @@ export default function NewSessionPage() {
       return;
     }
 
-    const token = await getToken();
+    const token = await getTokenRobust();
     if (!token) {
-      router.replace("/login");
+      router.replace("/login?redirect=" + encodeURIComponent("/app/sessions/new"));
       return;
     }
 
-    const rutClean = cleanRut(passcodeRut.trim());
-    if (passcodeRut.trim() && !isValidRut(rutClean)) {
+    const passRaw = passcodeRut.trim();
+    const passClean = cleanRut(passRaw);
+    if (passRaw && !isValidRut(passClean)) {
       setErr("RUT relator (passcode) inválido.");
       return;
     }
@@ -132,7 +180,7 @@ export default function NewSessionPage() {
         location: location.trim() ? location.trim() : null,
         trainer_name: trainerName.trim(),
         session_date: iso,
-        trainer_rut: passcodeRut.trim() ? rutClean : null, // ✅ lo que espera tu endpoint
+        trainer_rut: passRaw ? passClean : null, // lo espera el endpoint
       };
 
       const res = await fetch(`/api/app/companies/${companyId}/sessions`, {
@@ -150,6 +198,7 @@ export default function NewSessionPage() {
         return;
       }
 
+      // abrir admin de la charla
       router.push(`/admin/s/${code}`);
     } catch (e: any) {
       setErr(e?.message || "Error al crear charla");
@@ -160,36 +209,100 @@ export default function NewSessionPage() {
 
   return (
     <div className={styles.page}>
+      {/* Header */}
       <div className={styles.headCard}>
         <div>
           <div className={styles.kicker}>Charlas</div>
           <h1 className={styles.h1}>Crear charla</h1>
-          <p className={styles.sub}>Crea la charla, abre admin, cierra con firma y genera PDF final.</p>
+          <p className={styles.sub}>Crea → abre admin → registro por QR → cierre relator → PDF final.</p>
         </div>
 
         <div className={styles.headActions}>
-          <button type="button" className="btn btnGhost" onClick={() => router.push("/app/sessions")}>
+          <Link className="btn btnGhost" href="/app/sessions">
             ← Volver
-          </button>
+          </Link>
+          <Link className="btn btnPrimary" href="/app/companies/new">
+            + Nueva empresa
+          </Link>
         </div>
       </div>
 
       {err ? <div className={`${styles.alert} ${styles.alertErr}`}>{err}</div> : null}
 
       <div className={styles.grid}>
+        {/* Left: Flow / Preview */}
         <aside className={styles.aside}>
-          <div className={styles.asideTitle}>Checklist</div>
-          <div className={styles.asideItem}>✅ Empresa</div>
-          <div className={styles.asideItem}>✅ Tema</div>
-          <div className={styles.asideItem}>✅ Relator</div>
-          <div className={styles.asideItem}>✅ Fecha/hora</div>
-          <div className={styles.asideItem}>✅ Passcode opcional (RUT relator)</div>
+          <div className={styles.asideTop}>
+            <div className={styles.asideTitle}>Vista ejecutiva</div>
+            <div className={styles.asideSub}>Qué ocurre después de crear</div>
+          </div>
 
-          <div className={styles.asideNote}>
-            Tip: si defines el <b>passcode</b> aquí, el admin queda listo para cierre + PDF.
+          <div className={styles.flow}>
+            <div className={styles.flowItem}>
+              <span className={styles.flowDot} />
+              <div>
+                <div className={styles.flowTitle}>1) Se genera código + QR</div>
+                <div className={styles.flowText}>Código de 6 caracteres para el registro público.</div>
+              </div>
+            </div>
+
+            <div className={styles.flowItem}>
+              <span className={styles.flowDot} />
+              <div>
+                <div className={styles.flowTitle}>2) Registro desde celular</div>
+                <div className={styles.flowText}>Nombre, RUT + DV, cargo (si aplica) y firma.</div>
+              </div>
+            </div>
+
+            <div className={styles.flowItem}>
+              <span className={styles.flowDot} />
+              <div>
+                <div className={styles.flowTitle}>3) Cierre del relator</div>
+                <div className={styles.flowText}>Firma de cierre para bloquear el listado.</div>
+              </div>
+            </div>
+
+            <div className={styles.flowItem}>
+              <span className={styles.flowDot} />
+              <div>
+                <div className={styles.flowTitle}>4) PDF final</div>
+                <div className={styles.flowText}>Lista + firmas + logos (respaldo para auditoría).</div>
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.previewCard}>
+            <div className={styles.previewTitle}>Resumen</div>
+
+            <div className={styles.previewRow}>
+              <span className={styles.previewLabel}>Empresa</span>
+              <span className={styles.previewValue}>
+                {selectedCompany ? selectedCompany.name || "Empresa" : "—"}
+              </span>
+            </div>
+
+            <div className={styles.previewRow}>
+              <span className={styles.previewLabel}>Tema</span>
+              <span className={styles.previewValue}>{topic.trim() || "—"}</span>
+            </div>
+
+            <div className={styles.previewRow}>
+              <span className={styles.previewLabel}>Relator</span>
+              <span className={styles.previewValue}>{trainerName.trim() || "—"}</span>
+            </div>
+
+            <div className={styles.previewRow}>
+              <span className={styles.previewLabel}>Fecha/Hora</span>
+              <span className={styles.previewValue}>{sessionDate ? sessionDate.replace("T", " ") : "—"}</span>
+            </div>
+
+            <div className={styles.previewHint}>
+              Al crear, abriremos el admin de la charla automáticamente.
+            </div>
           </div>
         </aside>
 
+        {/* Right: Form */}
         <div className={styles.formCard}>
           <form onSubmit={createSession} className={styles.form}>
             <div className={styles.section}>
@@ -211,6 +324,15 @@ export default function NewSessionPage() {
                     </option>
                   ))}
                 </select>
+
+                {companies.length === 0 && !loading ? (
+                  <div className={styles.emptyCompanies}>
+                    No tienes empresas aún.{" "}
+                    <Link className={styles.inlineLink} href="/app/companies/new">
+                      Crear empresa →
+                    </Link>
+                  </div>
+                ) : null}
               </div>
 
               <div className={styles.row2}>
@@ -226,7 +348,7 @@ export default function NewSessionPage() {
                 </div>
 
                 <div className={styles.field}>
-                  <label className={styles.label}>Lugar</label>
+                  <label className={styles.label}>Lugar (opcional)</label>
                   <input
                     className="input"
                     placeholder="Ej: Puerto Montt"
@@ -257,6 +379,7 @@ export default function NewSessionPage() {
                     onChange={(e) => setSessionDate(e.target.value)}
                     required
                   />
+                  <div className={styles.hint}>Se guarda como fecha/hora de la charla.</div>
                 </div>
               </div>
             </div>
@@ -265,21 +388,35 @@ export default function NewSessionPage() {
               <div className={styles.sectionTitle}>Passcode admin (opcional)</div>
 
               <div className={styles.field}>
-                <label className={styles.label}>RUT relator (passcode)</label>
+                <div className={styles.labelRow}>
+                  <label className={styles.label}>RUT relator (passcode)</label>
+                  <span
+                    className={`${styles.rutPill} ${
+                      rutPill.kind === "ok" ? styles.rutOk : rutPill.kind === "bad" ? styles.rutBad : styles.rutIdle
+                    }`}
+                    title="Validación por DV"
+                  >
+                    {rutPill.label}
+                  </span>
+                </div>
+
                 <input
                   className="input"
-                  placeholder="Ej: 12.345.678-9"
+                  placeholder="12345678-5"
                   value={passcodeRut}
-                  onChange={(e) => setPasscodeRut(e.target.value)}
+                  onChange={(e) => setPasscodeRut(normalizeRutInput(e.target.value))}
+                  onBlur={() => setPasscodeRut(formatRutChile(passcodeRut))}
                 />
-                <div className={styles.hint}>Se recomienda para cierre + PDF en admin.</div>
+                <div className={styles.hint}>
+                  Recomendado: deja el admin listo para cierre + PDF (se valida DV).
+                </div>
               </div>
             </div>
 
             <div className={styles.actions}>
-              <button type="button" className="btn btnGhost" onClick={() => router.push("/app/sessions")}>
+              <Link className="btn btnGhost" href="/app/sessions">
                 Cancelar
-              </button>
+              </Link>
 
               <button type="submit" className="btn btnCta" disabled={saving || !canSave}>
                 {saving ? "Creando..." : "Crear y abrir admin →"}

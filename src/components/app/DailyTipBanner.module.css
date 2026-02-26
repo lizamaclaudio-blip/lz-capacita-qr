@@ -1,0 +1,71 @@
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(12, 14, 18, 0.10);
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 16px 50px rgba(2, 6, 23, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .bar {
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    background: rgba(12, 14, 18, 0.62);
+    box-shadow: 0 18px 70px rgba(0, 0, 0, 0.35);
+  }
+}
+
+.left {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kicker {
+  font-size: 12px;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+.tip {
+  min-width: 0;
+  font-size: 12.8px;
+  opacity: 0.92;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn {
+  border: 1px solid rgba(12, 14, 18, 0.12);
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.06);
+  }
+}

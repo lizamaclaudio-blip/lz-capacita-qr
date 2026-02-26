@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -8,7 +9,7 @@ import styles from "./AppTopNav.module.css";
 type Props = {
   greetingName?: string | null;
   email?: string | null;
-  subtitle?: string; // compat
+  subtitle?: string;
   onLogout: () => void;
   onOpenMobile: () => void;
 };
@@ -20,7 +21,7 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
-export default function AppTopNav({ greetingName, email, onLogout, onOpenMobile }: Props) {
+export default function AppTopNav({ greetingName, email, subtitle, onLogout, onOpenMobile }: Props) {
   const pathname = usePathname() || "/app";
 
   const items: NavItem[] = useMemo(
@@ -73,11 +74,13 @@ export default function AppTopNav({ greetingName, email, onLogout, onOpenMobile 
           </button>
 
           <Link href="/app" className={styles.brand}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/lz-capacita-qr.png" alt="LZ" className={styles.logo} />
+            <span className={styles.logoBox} aria-hidden="true">
+              <Image src="/brand/lzq-mark.svg" alt="LZ" fill priority sizes="42px" className={styles.logoImg} />
+            </span>
+
             <div className={styles.brandText}>
               <div className={styles.brandTitle}>LZ Capacita QR</div>
-              <div className={styles.brandSub}>Panel</div>
+              <div className={styles.brandSub}>{subtitle || "Panel"}</div>
             </div>
           </Link>
         </div>
@@ -97,7 +100,7 @@ export default function AppTopNav({ greetingName, email, onLogout, onOpenMobile 
         {/* Right: user menu */}
         <div className={styles.right} ref={menuRef}>
           <button className={styles.userBtn} type="button" onClick={() => setMenuOpen((v) => !v)}>
-            <span className={styles.userDot} />
+            <span className={styles.userDot} aria-hidden="true" />
             <span className={styles.userName}>{displayName}</span>
             <span className={styles.userChevron}>{menuOpen ? "▴" : "▾"}</span>
           </button>

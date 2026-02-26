@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
@@ -49,11 +50,14 @@ export default function MobileNavDrawer({ open, onClose, email, greetingName, on
   return (
     <>
       <div className={`${styles.backdrop} ${open ? styles.backdropOpen : ""}`} onClick={onClose} />
+
       <aside className={`${styles.drawer} ${open ? styles.drawerOpen : ""}`} role="dialog" aria-modal="true">
         <div className={styles.head}>
           <div className={styles.brand}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/lz-capacita-qr.png" alt="LZ" className={styles.logo} />
+            <span className={styles.logoBox} aria-hidden="true">
+              <Image src="/brand/lzq-mark.svg" alt="LZ" fill priority sizes="42px" className={styles.logoImg} />
+            </span>
+
             <div className={styles.brandText}>
               <div className={styles.title}>LZ Capacita QR</div>
               <div className={styles.sub}>Menú</div>

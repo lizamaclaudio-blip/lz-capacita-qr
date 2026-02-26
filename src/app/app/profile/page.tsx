@@ -3,12 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
-import {
-  cleanRut,
-  isValidRut,
-  formatRutChile,
-  normalizeRutInput,
-} from "@/lib/rut";
+import { cleanRut, isValidRut, formatRutChile, normalizeRutInput } from "@/lib/rut";
 import styles from "./page.module.css";
 
 type UserMeta = {
@@ -38,7 +33,7 @@ export default function ProfilePage() {
 
   const [email, setEmail] = useState<string>("");
 
-  // Metadata (perfil)
+  // Perfil (metadata)
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [rut, setRut] = useState("");
@@ -48,7 +43,7 @@ export default function ProfilePage() {
   const [comuna, setComuna] = useState("");
   const [city, setCity] = useState("");
 
-  // Security: change password
+  // Seguridad (password)
   const [pw1, setPw1] = useState("");
   const [pw2, setPw2] = useState("");
   const [pwSaving, setPwSaving] = useState(false);
@@ -60,9 +55,20 @@ export default function ProfilePage() {
   const fullName = useMemo(() => {
     const f = firstName.trim();
     const l = lastName.trim();
-    const built = `${f} ${l}`.trim();
-    return built || "";
+    return `${f} ${l}`.trim();
   }, [firstName, lastName]);
+
+  const initials = useMemo(() => {
+    const f = firstName.trim();
+    const l = lastName.trim();
+    const a = (f[0] || "").toUpperCase();
+    const b = (l[0] || "").toUpperCase();
+    return (a + b) || "U";
+  }, [firstName, lastName]);
+
+  const rutClean = useMemo(() => cleanRut(rut), [rut]);
+  const rutLooksComplete = useMemo(() => rutClean.length >= 8, [rutClean]);
+  const rutOk = useMemo(() => (rutClean ? isValidRut(rutClean) : false), [rutClean]);
 
   async function loadUser() {
     setLoading(true);
@@ -91,7 +97,6 @@ export default function ProfilePage() {
     setFirstName(toStr(md.first_name));
     setLastName(toStr(md.last_name));
 
-    // guardamos rut “limpio” pero mostramos formateado
     const r = toStr(md.rut);
     setRut(r ? formatRutChile(r) : "");
 
@@ -176,15 +181,10 @@ export default function ProfilePage() {
         city: city.trim(),
       };
 
-      const { error } = await supabaseBrowser.auth.updateUser({
-        data: payload,
-      });
-
+      const { error } = await supabaseBrowser.auth.updateUser({ data: payload });
       if (error) throw new Error(error.message);
 
-      // Mostrar rut formateado
       setRut(formatRutChile(rClean));
-
       setOk("✅ Perfil actualizado.");
       window.setTimeout(() => setOk(null), 1600);
     } catch (e: any) {
@@ -201,6 +201,7 @@ export default function ProfilePage() {
 
     const a = pw1.trim();
     const b = pw2.trim();
+
     if (!a || a.length < 6) {
       setPwErr("La nueva contraseña debe tener al menos 6 caracteres.");
       return;
@@ -227,7 +228,14 @@ export default function ProfilePage() {
   }
 
   if (loading) {
-    return <div className={styles.loading}>Cargando perfil…</div>;
+    return (
+      <div className={styles.loadingShell}>
+        <div className={styles.loadingCard}>
+          <div className={styles.loadingTitle}>Cargando perfil…</div>
+          <div className={styles.loadingSub}>Verificando tu sesión</div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -238,11 +246,15 @@ export default function ProfilePage() {
           <div className={styles.kicker}>Perfil</div>
           <h1 className={styles.h1}>Mi cuenta</h1>
           <p className={styles.sub}>
-            Aquí están los mismos datos que se piden al registrarse. Se usan para trazabilidad y auditoría.
+            Estos datos se usan para trazabilidad, auditoría y respaldo en tus capacitaciones.
           </p>
         </div>
 
         <div className={styles.headActions}>
+          <button className="btn btnGhost" type="button" onClick={() => router.push("/app")}
+            title="Volver al dashboard">
+            ← Dashboard
+          </button>
           <button className="btn btnGhost" type="button" onClick={loadUser}>
             Recargar
           </button>
@@ -251,6 +263,22 @@ export default function ProfilePage() {
 
       {err ? <div className={styles.errBox}>{err}</div> : null}
       {ok ? <div className={styles.okBox}>{ok}</div> : null}
+
+      {/* Summary */}
+      <section className={styles.summary}>
+        <div className={styles.avatar}>{initials}</div>
+        <div className={styles.summaryText}>
+          <div className={styles.summaryName}>{fullName || "Usuario"}</div>
+          <div className={styles.summaryEmail}>{email || lastLoadedEmail.current}</div>
+        </div>
+
+        <div className={styles.summaryPills}>
+          <span className={`${styles.pill} ${rutClean && rutLooksComplete ? (rutOk ? styles.pillOk : styles.pillWarn) : styles.pillMuted}`}>
+            {rutClean && rutLooksComplete ? (rutOk ? "DV OK" : "Revisar DV") : "RUT"}
+          </span>
+          <span className={`${styles.pill} ${styles.pillMuted}`}>Cuenta</span>
+        </div>
+      </section>
 
       <div className={styles.grid}>
         {/* Profile form */}
@@ -267,28 +295,26 @@ export default function ProfilePage() {
             <div className={styles.row2}>
               <div className={styles.field}>
                 <label className={styles.label}>Nombres</label>
-                <input
-                  className="input"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  required
-                />
+                <input className="input" value={firstName} onChange={(e) => setFirstName(e.target.value)} required />
               </div>
 
               <div className={styles.field}>
                 <label className={styles.label}>Apellidos</label>
-                <input
-                  className="input"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  required
-                />
+                <input className="input" value={lastName} onChange={(e) => setLastName(e.target.value)} required />
               </div>
             </div>
 
             <div className={styles.row2}>
               <div className={styles.field}>
-                <label className={styles.label}>RUT</label>
+                <div className={styles.labelRow}>
+                  <label className={styles.label}>RUT</label>
+                  <span
+                    className={`${styles.rutPill} ${rutClean && rutLooksComplete ? (rutOk ? styles.rutOk : styles.rutBad) : styles.rutIdle}`}
+                    title="Validación por dígito verificador (DV)"
+                  >
+                    {rutClean && rutLooksComplete ? (rutOk ? "DV OK" : "DV inválido") : "Chile"}
+                  </span>
+                </div>
                 <input
                   className="input"
                   placeholder="12345678-5"
@@ -297,7 +323,7 @@ export default function ProfilePage() {
                   onBlur={() => setRut(formatRutChile(rut))}
                   required
                 />
-                <div className={styles.hint}>Formato Chile: XXXXXXXX-X. Validamos DV.</div>
+                <div className={styles.hint}>Formato Chile: XXXXXXXX-X (sin puntos). Validamos DV.</div>
               </div>
 
               <div className={styles.field}>
@@ -315,12 +341,7 @@ export default function ProfilePage() {
 
             <div className={styles.field}>
               <label className={styles.label}>Dirección</label>
-              <input
-                className="input"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                required
-              />
+              <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} required />
             </div>
 
             <div className={styles.row3}>
@@ -340,11 +361,11 @@ export default function ProfilePage() {
 
             <div className={styles.actions}>
               <div className={styles.namePreview}>
-                Nombre completo: <b>{fullName || "—"}</b>
+                Nombre completo: <span className={styles.previewStrong}>{fullName || "—"}</span>
               </div>
 
               <button className="btn btnCta" type="submit" disabled={saving}>
-                {saving ? "Guardando..." : "Guardar cambios"}
+                {saving ? "Guardando…" : "Guardar cambios"}
               </button>
             </div>
           </form>
@@ -387,7 +408,7 @@ export default function ProfilePage() {
 
             <div className={styles.actions}>
               <button className="btn btnPrimary" type="submit" disabled={pwSaving}>
-                {pwSaving ? "Actualizando..." : "Actualizar contraseña"}
+                {pwSaving ? "Actualizando…" : "Actualizar contraseña"}
               </button>
             </div>
           </form>

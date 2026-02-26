@@ -214,7 +214,13 @@ export default function CreateCompanyPage() {
       }
 
       setOk("✅ Empresa creada.");
-      router.push("/app/companies");
+      const id = String(json?.company?.id || "").trim();
+      if (id) {
+        // Flujo recomendado: abrir ficha empresa (desde ahí se crea la charla preseleccionada)
+        router.push(`/app/company/${encodeURIComponent(id)}`);
+      } else {
+        router.push("/app/companies");
+      }
     } catch (err: any) {
       setSaving(false);
       setError(err?.message || "Error inesperado al crear empresa");

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import styles from "./page.module.css";
 import { SignaturePad, type SignaturePadRef } from "@/components/SignaturePad";
-import { cleanRut, isValidRut } from "@/lib/rut";
+import { cleanRut, isValidRut, formatRutChile, normalizeRutInput } from "@/lib/rut";
 
 type CompanyInfo = {
   id?: string;
@@ -36,107 +36,132 @@ function logoPublicUrl(logo_path?: string | null) {
   return `${base}/storage/v1/object/public/company-logos/${clean}`;
 }
 
+function fmtDate(iso: string | null) {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("es-CL");
+  } catch {
+    return "—";
+  }
+}
+
 export default function PublicCheckinPage() {
   const params = useParams<{ code: string }>();
   const raw = (params?.code ?? "") as unknown as string | string[];
   const code = (Array.isArray(raw) ? raw[0] : raw).toUpperCase().trim();
 
+  const sigRef = useRef<SignaturePadRef | null>(null);
+
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
 
+  // form
   const [fullName, setFullName] = useState("");
   const [rut, setRut] = useState("");
   const [role, setRole] = useState("");
 
-  const [sending, setSending] = useState(false);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
-
   // "form" -> formulario
-  // "success" -> ventana 5 segundos
-  // "done" -> pantalla final sin formulario
+  // "success" -> thanks + countdown
+  // "done" -> pantalla final (sin formulario)
   const [mode, setMode] = useState<"form" | "success" | "done">("form");
   const [countdown, setCountdown] = useState(5);
 
-  const sigRef = useRef<SignaturePadRef | null>(null);
-
   const isClosed = useMemo(() => {
-    const st = (session?.status ?? "").toLowerCase();
+    const st = (session?.status || "").toLowerCase();
     return st === "closed" || !!session?.closed_at;
   }, [session]);
 
-  const companyLogo = useMemo(() => logoPublicUrl(session?.company?.logo_path ?? null), [session]);
+  const companyLogo = useMemo(() => logoPublicUrl(session?.company?.logo_path ?? null), [session?.company?.logo_path]);
+
+  const rutClean = useMemo(() => cleanRut(rut), [rut]);
+  const rutLooksComplete = useMemo(() => rutClean.length >= 8, [rutClean]);
+  const rutOk = useMemo(() => (rutClean ? isValidRut(rutClean) : false), [rutClean]);
 
   async function loadSession() {
-    setLoading(true);
     setError(null);
 
-    const res = await fetch(`/api/public/session?code=${encodeURIComponent(code)}`, {
-      cache: "no-store",
-    });
+    try {
+      const res = await fetch(`/api/public/session?code=${encodeURIComponent(code)}`, { cache: "no-store" });
+      const json = await res.json().catch(() => null);
 
-    const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error || "No se pudo cargar la charla");
 
-    if (!res.ok) {
+      setSession(json?.session ?? null);
+    } catch (e: any) {
+      setError(e?.message || "Error al cargar la charla");
       setSession(null);
-      setLoading(false);
-      setError(json?.error || "No se pudo cargar la charla");
-      return;
     }
-
-    setSession(json?.session ?? null);
-    setLoading(false);
   }
 
   useEffect(() => {
-    if (!code) return;
-    loadSession();
+    let alive = true;
+
+    (async () => {
+      if (!code) {
+        setError("Código inválido.");
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      await loadSession();
+
+      if (!alive) return;
+      setLoading(false);
+    })();
+
+    return () => {
+      alive = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
-  // Countdown + transición a pantalla final
   useEffect(() => {
     if (mode !== "success") return;
 
-    setCountdown(5);
+    // scroll top for a clean "thanks" view
+    try {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      // ignore
+    }
 
-    const i = window.setInterval(() => {
-      setCountdown((c) => (c <= 1 ? 1 : c - 1));
+    setCountdown(5);
+    const t = window.setInterval(() => {
+      setCountdown((v) => {
+        if (v <= 1) {
+          window.clearInterval(t);
+          setMode("done");
+          return 0;
+        }
+        return v - 1;
+      });
     }, 1000);
 
-    const t = window.setTimeout(() => {
-      setMode("done");
-      // Intento cerrar (solo funciona si la ventana fue abierta por script)
-      try {
-        window.close();
-      } catch {}
-    }, 5000);
-
-    return () => {
-      window.clearInterval(i);
-      window.clearTimeout(t);
-    };
+    return () => window.clearInterval(t);
   }, [mode]);
 
   async function submit() {
     setError(null);
     setOkMsg(null);
 
-    if (isClosed) return setError("Esta charla está cerrada.");
-    if (mode !== "form") return;
+    if (!session) return setError("No se encontró la charla.");
+    if (isClosed) return setError("Esta charla ya está cerrada. No es posible registrar asistencia.");
 
     const nm = fullName.trim();
-    if (!nm) return setError("Ingresa tu nombre.");
+    if (!nm) return setError("Ingresa tu nombre completo.");
 
-    const rutClean = cleanRut(rut.trim());
-    if (!rutClean) return setError("Ingresa tu RUT.");
-    if (!isValidRut(rutClean)) return setError("RUT inválido (dígito verificador incorrecto).");
+    const r = cleanRut(rut);
+    if (!r || !isValidRut(r)) return setError("RUT inválido (revisa dígito verificador).");
 
-    if (!sigRef.current || sigRef.current.isEmpty()) {
-      return setError("Falta tu firma 👇");
-    }
+    const rl = role.trim();
+    if (!rl) return setError("Indica tu cargo.");
 
-    const signature_data_url = sigRef.current.toPngDataUrl();
+    const signature_data_url = sigRef.current?.toPngDataUrl();
     if (!signature_data_url) return setError("No se pudo capturar la firma. Intenta de nuevo.");
 
     setSending(true);
@@ -148,27 +173,27 @@ export default function PublicCheckinPage() {
         body: JSON.stringify({
           code,
           full_name: nm,
-          rut: rutClean,
-          role: role.trim() ? role.trim() : null,
+          rut: r,
+          role: rl,
           signature_data_url,
         }),
       });
 
       const json = await res.json().catch(() => null);
 
-      // Si ya estaba registrado (409), lo dejamos igual “final”
+      // 409 => ya registrado
       if (res.status === 409) {
+        setOkMsg("Este RUT ya estaba registrado en esta charla.");
         setMode("done");
-        setOkMsg("✅ Este RUT ya estaba registrado en esta charla.");
         return;
       }
 
       if (!res.ok) throw new Error(json?.error || "No se pudo registrar");
 
-      setOkMsg("✅ Registro realizado. ¡Gracias por asistir! 🙌");
+      setOkMsg("Registro realizado. ¡Gracias por asistir!");
       setMode("success");
 
-      // Limpia formulario (aunque ya no se mostrará)
+      // Limpia formulario
       setFullName("");
       setRut("");
       setRole("");
@@ -176,180 +201,228 @@ export default function PublicCheckinPage() {
 
       loadSession();
     } catch (e: any) {
-      setError(e?.message || "Error");
+      setError(e?.message || "No se pudo registrar");
     } finally {
       setSending(false);
     }
   }
 
+  if (loading) {
+    return (
+      <main className={styles.shell}>
+        <div className={styles.centerCard}>
+          <div className={styles.centerTitle}>Cargando…</div>
+          <div className={styles.centerSub}>Preparando registro</div>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <div className={styles.page}>
+    <main className={styles.shell}>
       <div className={styles.container}>
-        <div className={`glass ${styles.card}`}>
-          <div className={styles.brandRow}>
-            <div className={styles.brandLogo}>
+        {/* Header */}
+        <header className={styles.header}>
+          <div className={styles.brand}>
+            <div className={styles.brandMark}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/lz-capacita-qr.png" alt="LZ Capacita QR" />
+              <img src="/brand/lzq-mark.svg" alt="LZ" />
             </div>
+
             <div className={styles.brandText}>
-              <div className={styles.title}>Registro de asistencia</div>
-              <div className={styles.sub}>LZ Capacita QR · Código {code}</div>
+              <div className={styles.brandTitle}>Registro de asistencia</div>
+              <div className={styles.brandSub}>Código {code} · LZ Capacita QR</div>
             </div>
           </div>
 
-          <div className={styles.badges}>
-            <span className={`${styles.pill} ${isClosed ? styles.pillWarn : styles.pillOk}`}>
-              {isClosed ? "🔒 Charla cerrada" : "🟢 Charla abierta"}
+          <div className={styles.headerRight}>
+            <span className={`${styles.pill} ${isClosed ? styles.pillClosed : styles.pillOpen}`}>
+              {isClosed ? "Charla cerrada" : "Charla abierta"}
             </span>
-            {session?.topic ? <span className={styles.pill}>🎯 {session.topic}</span> : null}
           </div>
+        </header>
 
-          {error && <div className={styles.toastErr}>{error}</div>}
-          {okMsg && <div className={styles.toastOk}>{okMsg}</div>}
+        {error ? <div className={`${styles.alert} ${styles.alertErr}`}>{error}</div> : null}
+        {okMsg ? <div className={`${styles.alert} ${styles.alertOk}`}>{okMsg}</div> : null}
 
-          {mode === "success" ? (
-            <div style={{ marginTop: 14 }}>
-              <div className="glass card">
-                <div style={{ fontWeight: 950, fontSize: 18 }}>Registro exitoso ✅</div>
-                <div style={{ marginTop: 6, opacity: 0.75, fontWeight: 800 }}>
-                  Esta ventana se cerrará / finalizará en <b>{countdown}</b> segundo(s).
-                </div>
-                <div style={{ marginTop: 10, opacity: 0.7, fontWeight: 800 }}>
-                  (Si no se cierra automático, puedes cerrarla manualmente.)
-                </div>
+        <div className={styles.grid}>
+          {/* Left */}
+          <section className={styles.card}>
+            <div className={styles.cardHead}>
+              <div>
+                <div className={styles.cardTitle}>Tus datos</div>
+                <div className={styles.cardSub}>RUT + DV y firma como respaldo.</div>
               </div>
+
+              <span
+                className={`${styles.pill} ${
+                  rutClean && rutLooksComplete ? (rutOk ? styles.pillOk : styles.pillWarn) : styles.pillMuted
+                }`}
+              >
+                {rutClean && rutLooksComplete ? (rutOk ? "DV OK" : "Revisar DV") : "RUT"}
+              </span>
             </div>
-          ) : mode === "done" ? (
-            <div style={{ marginTop: 14 }}>
-              <div className="glass card">
-                <div style={{ fontWeight: 950, fontSize: 18 }}>¡Listo! ✅</div>
-                <div style={{ marginTop: 6, opacity: 0.75, fontWeight: 800 }}>
-                  Tu asistencia quedó registrada. Ya no es posible volver a inscribirse desde esta pantalla.
+
+            {mode === "success" ? (
+              <div className={styles.thanks}>
+                <div className={styles.bigIcon} aria-hidden="true">
+                  ✓
                 </div>
-                <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button className="btn" type="button" onClick={() => loadSession()}>
+                <div className={styles.thanksTitle}>¡Listo!</div>
+                <div className={styles.thanksSub}>Tu asistencia quedó registrada.</div>
+                <div className={styles.thanksMicro}>Puedes cerrar esta pestaña. Finaliza automáticamente en {countdown}s.</div>
+
+                <button className="btn btnGhost" type="button" onClick={() => setMode("done")}>
+                  Continuar
+                </button>
+              </div>
+            ) : mode === "done" ? (
+              <div className={styles.thanks}>
+                <div className={styles.bigIcon} aria-hidden="true">
+                  ✓
+                </div>
+                <div className={styles.thanksTitle}>Registro confirmado</div>
+                <div className={styles.thanksSub}>Gracias por asistir.</div>
+                <div className={styles.thanksMicro}>Si necesitas corregir un dato, habla con el relator.</div>
+
+                <div className={styles.thanksActions}>
+                  <button className="btn btnGhost" type="button" onClick={() => loadSession()}>
                     Actualizar
+                  </button>
+                  <button className="btn btnPrimary" type="button" onClick={() => window.close()}>
+                    Cerrar
                   </button>
                 </div>
               </div>
-            </div>
-          ) : (
-            <>
-              <div className={styles.formGrid}>
-                <div className={styles.field}>
-                  <label className={styles.label}>Nombre completo *</label>
-                  <input
-                    className="input"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Ej: Juan Pérez"
-                    disabled={sending || isClosed}
-                  />
+            ) : (
+              <div className={styles.form}>
+                <div className={styles.row2}>
+                  <div className={styles.field}>
+                    <label className={styles.label}>Nombre completo *</label>
+                    <input
+                      className="input"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Ej: Juan Pérez"
+                      disabled={sending || isClosed}
+                    />
+                  </div>
+
+                  <div className={styles.field}>
+                    <div className={styles.labelRow}>
+                      <label className={styles.label}>RUT *</label>
+                      <span
+                        className={`${styles.rutPill} ${
+                          rutClean && rutLooksComplete ? (rutOk ? styles.rutOk : styles.rutBad) : styles.rutIdle
+                        }`}
+                        title="Validación por DV"
+                      >
+                        {rutClean && rutLooksComplete ? (rutOk ? "DV OK" : "DV inválido") : "Chile"}
+                      </span>
+                    </div>
+
+                    <input
+                      className="input"
+                      value={rut}
+                      onChange={(e) => setRut(normalizeRutInput(e.target.value))}
+                      onBlur={() => setRut(formatRutChile(rut))}
+                      placeholder="12345678-5"
+                      disabled={sending || isClosed}
+                    />
+                    <div className={styles.hint}>Formato Chile: XXXXXXXX-X (sin puntos).</div>
+                  </div>
                 </div>
 
                 <div className={styles.field}>
-                  <label className={styles.label}>RUT *</label>
-                  <input
-                    className="input"
-                    value={rut}
-                    onChange={(e) => setRut(e.target.value)}
-                    placeholder="Ej: 12.345.678-9"
-                    disabled={sending || isClosed}
-                  />
-                  <div className={styles.hint}>Se valida dígito verificador.</div>
-                </div>
-
-                <div className={styles.field} style={{ gridColumn: "1 / -1" }}>
-                  <label className={styles.label}>Cargo</label>
+                  <label className={styles.label}>Cargo *</label>
                   <input
                     className="input"
                     value={role}
                     onChange={(e) => setRole(e.target.value)}
-                    placeholder="Ej: Operador, Supervisor..."
+                    placeholder="Ej: Operador, Supervisor…"
                     disabled={sending || isClosed}
                   />
                 </div>
 
-                <div className={styles.field} style={{ gridColumn: "1 / -1" }}>
+                <div className={styles.field}>
                   <label className={styles.label}>Firma *</label>
 
-                  <div
-                    className="glass"
-                    style={{
-                      borderRadius: 18,
-                      overflow: "hidden",
-                      border: "1px solid rgba(15,23,42,.10)",
-                      background: "rgba(255,255,255,.55)",
-                      padding: 10,
-                    }}
-                  >
+                  <div className={styles.signatureBox}>
                     <SignaturePad ref={sigRef} height={220} />
                   </div>
 
                   <div className={styles.actions}>
-                    <button type="button" className="btn" onClick={() => sigRef.current?.clear()} disabled={sending}>
+                    <button
+                      type="button"
+                      className="btn btnGhost"
+                      onClick={() => sigRef.current?.clear()}
+                      disabled={sending}
+                    >
                       Limpiar firma
                     </button>
 
                     <button type="button" className="btn btnPrimary" onClick={submit} disabled={sending || isClosed}>
-                      {isClosed ? "Charla cerrada" : sending ? "Registrando..." : "Registrar asistencia"}
+                      {sending ? "Registrando…" : "Registrar asistencia"}
                     </button>
+                  </div>
+
+                  <div className={styles.micro}>
+                    Al registrar, aceptas el uso de estos datos como respaldo de capacitación.
                   </div>
                 </div>
               </div>
-            </>
-          )}
-        </div>
+            )}
+          </section>
 
-        {/* Columna empresa */}
-        <div className={`glass ${styles.sideCard}`}>
-          <div className={styles.sideTitle}>Empresa</div>
+          {/* Right */}
+          <aside className={styles.side}>
+            <div className={styles.sideCard}>
+              <div className={styles.sideTitle}>Detalle de la charla</div>
 
-          <div className={styles.sideCompany}>
-            <div className={styles.sideLogo}>
-              {companyLogo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={companyLogo} alt="Logo empresa" />
-              ) : (
-                <div className={styles.sideLogoFallback}>🏢</div>
-              )}
-            </div>
+              <div className={styles.companyRow}>
+                <span className={styles.companyLogo}>
+                  {companyLogo ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={companyLogo} alt="Logo empresa" />
+                  ) : (
+                    <span className={styles.companyInitial}>{(session?.company?.name?.[0] || "E").toUpperCase()}</span>
+                  )}
+                </span>
 
-            <div>
-              <div className={styles.sideCompanyName}>{session?.company?.name ?? "—"}</div>
-              <div className={styles.sideMeta}>
-                {session?.company?.rut ? `RUT: ${session.company.rut}` : "RUT: —"}
+                <div className={styles.companyText}>
+                  <div className={styles.companyName}>{session?.company?.name || "Empresa"}</div>
+                  <div className={styles.companyMeta}>{session?.topic ? session.topic : "—"}</div>
+                </div>
               </div>
-              <div className={styles.sideMeta}>
-                {session?.company?.address ? session.company.address : "—"}
+
+              <div className={styles.infoGrid}>
+                <div className={styles.infoItem}>
+                  <div className={styles.infoLabel}>Relator</div>
+                  <div className={styles.infoValue}>{session?.trainer_name || "—"}</div>
+                </div>
+                <div className={styles.infoItem}>
+                  <div className={styles.infoLabel}>Fecha / hora</div>
+                  <div className={styles.infoValue}>{fmtDate(session?.session_date || null)}</div>
+                </div>
+                <div className={styles.infoItem}>
+                  <div className={styles.infoLabel}>Lugar</div>
+                  <div className={styles.infoValue}>{session?.location || "—"}</div>
+                </div>
+                <div className={styles.infoItem}>
+                  <div className={styles.infoLabel}>Estado</div>
+                  <div className={styles.infoValue}>{isClosed ? "Cerrada" : "Abierta"}</div>
+                </div>
               </div>
+
+              <button className="btn btnGhost" type="button" onClick={() => loadSession()}>
+                Actualizar detalle
+              </button>
+
+              <div className={styles.sideHint}>Si la charla se cierra, el registro se bloquea automáticamente.</div>
             </div>
-          </div>
-
-          <div className={styles.sideTitle} style={{ marginTop: 12 }}>
-            Charla
-          </div>
-
-          <div className={styles.sideMetaRow}>
-            <div className={styles.sideMetaLabel}>Tema</div>
-            <div className={styles.sideMetaValue}>{session?.topic ?? "—"}</div>
-          </div>
-
-          <div className={styles.sideMetaRow}>
-            <div className={styles.sideMetaLabel}>Relator</div>
-            <div className={styles.sideMetaValue}>{session?.trainer_name ?? "—"}</div>
-          </div>
-
-          <div className={styles.sideMetaRow}>
-            <div className={styles.sideMetaLabel}>Lugar</div>
-            <div className={styles.sideMetaValue}>{session?.location ?? "—"}</div>
-          </div>
-
-          {loading ? (
-            <div style={{ marginTop: 10, opacity: 0.7, fontWeight: 800 }}>Cargando…</div>
-          ) : null}
+          </aside>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

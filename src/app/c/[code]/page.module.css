@@ -1,214 +1,464 @@
-.page {
+/* Public check-in (/c/[code]) — Executive (Piano Black) */
+
+.shell {
   min-height: 100vh;
+  padding: 18px 14px 34px;
   display: grid;
   place-items: center;
-  padding: 18px;
+}
+
+.centerCard {
+  width: min(560px, 100%);
+  border-radius: 22px;
+  padding: 18px 16px;
+  background: var(--surface);
+  border: 1px solid rgba(var(--ink), 0.10);
+  box-shadow: var(--shadow-md);
+}
+
+.centerTitle {
+  font-weight: 780;
+  letter-spacing: -0.01em;
+}
+.centerSub {
+  margin-top: 6px;
+  font-size: 12.5px;
+  opacity: 0.72;
 }
 
 .container {
-  width: min(980px, 100%);
+  width: min(1060px, 100%);
   display: grid;
-  grid-template-columns: 1.25fr 0.75fr;
-  gap: 14px;
+  gap: 12px;
+}
+
+/* Header */
+.header {
+  border-radius: var(--radius-xl);
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid rgba(var(--ink), 0.10);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brandMark {
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(var(--piano), 1), rgba(var(--piano2), 1));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  place-items: center;
+}
+.brandMark img {
+  width: 28px;
+  height: 28px;
+  opacity: 0.92;
+}
+
+.brandText {
+  display: grid;
+  gap: 3px;
+}
+
+.brandTitle {
+  font-weight: 820;
+  letter-spacing: -0.01em;
+  font-size: 14px;
+}
+
+.brandSub {
+  font-size: 12px;
+  opacity: 0.72;
+}
+
+/* Alerts */
+.alert {
+  border-radius: 18px;
+  padding: 12px;
+  font-weight: 700;
+  border: 1px solid rgba(var(--ink), 0.10);
+  box-shadow: var(--shadow-sm);
+}
+
+.alertErr {
+  border-color: rgba(239, 68, 68, 0.22);
+  background: rgba(239, 68, 68, 0.10);
+  color: rgba(127, 29, 29, 0.95);
+}
+
+.alertOk {
+  border-color: rgba(var(--accent), 0.18);
+  background: rgba(var(--accent), 0.10);
+}
+
+/* Layout */
+.grid {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 12px;
+  align-items: start;
 }
 
 @media (max-width: 980px) {
-  .container {
+  .grid {
     grid-template-columns: 1fr;
   }
 }
 
+/* Card */
 .card {
   border-radius: var(--radius-xl);
   padding: 16px;
+  background: var(--surface);
+  border: 1px solid rgba(var(--ink), 0.10);
+  box-shadow: var(--shadow-md);
 }
 
-.brandRow {
+.cardHead {
   display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
   gap: 10px;
-  align-items: center;
-}
-
-.brandLogo {
-  width: 64px;
-  height: 46px;
-  border-radius: 16px;
-  overflow: hidden;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.brandLogo img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  padding: 8px;
-}
-
-.brandText {
-  min-width: 0;
-}
-
-.title {
-  font-size: 22px;
-  font-weight: 950;
-  line-height: 1.1;
-}
-
-.sub {
-  margin-top: 2px;
-  font-size: 12px;
-  opacity: 0.72;
-  font-weight: 800;
-}
-
-.badges {
-  margin-top: 10px;
-  display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.cardTitle {
+  font-weight: 780;
+  letter-spacing: -0.01em;
+}
+
+.cardSub {
+  margin-top: 4px;
+  font-size: 12.5px;
+  opacity: 0.72;
+  line-height: 1.45;
 }
 
 .pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  font-size: 11.5px;
+  padding: 7px 10px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 950;
-  border: 1px solid rgba(15, 23, 42, 0.10);
-  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(var(--ink), 0.10);
+  background: rgba(255, 255, 255, 0.50);
+  opacity: 0.92;
+  font-weight: 720;
+}
+
+.pillMuted {
+  opacity: 0.76;
 }
 
 .pillOk {
-  border-color: rgba(var(--brand-teal), 0.30);
-  background: rgba(var(--brand-teal), 0.10);
+  border-color: rgba(var(--accent), 0.25);
 }
 
 .pillWarn {
-  border-color: rgba(var(--brand-amber), 0.35);
-  background: rgba(var(--brand-amber), 0.12);
+  border-color: rgba(239, 68, 68, 0.22);
 }
 
-.formGrid {
-  margin-top: 14px;
+.pillOpen {
+  color: rgba(10, 11, 15, 0.90);
+}
+
+.pillClosed {
+  color: white;
+  background: linear-gradient(135deg, rgba(var(--piano), 1), rgba(var(--piano2), 1));
+  border-color: rgba(var(--accent), 0.18);
+}
+
+/* Form */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
-@media (max-width: 980px) {
-  .formGrid {
+@media (max-width: 720px) {
+  .row2 {
     grid-template-columns: 1fr;
   }
 }
 
 .field {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 6px;
+}
+
+.labelRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
 }
 
 .label {
   font-size: 12px;
-  font-weight: 900;
-  opacity: 0.75;
+  font-weight: 760;
+  opacity: 0.72;
 }
 
 .hint {
-  font-size: 11px;
-  font-weight: 900;
-  opacity: 0.6;
+  font-size: 11.5px;
+  opacity: 0.62;
+  font-weight: 620;
+}
+
+.signatureBox {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.10);
+  background: rgba(255, 255, 255, 0.55);
+  padding: 10px;
 }
 
 .actions {
-  margin-top: 14px;
+  margin-top: 8px;
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
 }
 
-.sideTitle {
-  font-weight: 950;
-  font-size: 14px;
-}
-
-.sideSub {
-  font-size: 12px;
-  opacity: 0.72;
-  font-weight: 800;
-  margin-top: 2px;
-}
-
-.companyBox {
+.micro {
   margin-top: 10px;
-  border-radius: 18px;
-  padding: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.10);
+  font-size: 12px;
+  opacity: 0.70;
+  line-height: 1.45;
+}
+
+.rutPill {
+  font-size: 11px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--ink), 0.10);
   background: rgba(255, 255, 255, 0.50);
+  opacity: 0.86;
+  font-weight: 720;
+  white-space: nowrap;
+}
+.rutIdle {
+  opacity: 0.70;
+}
+.rutOk {
+  border-color: rgba(var(--accent), 0.25);
+}
+.rutBad {
+  border-color: rgba(239, 68, 68, 0.22);
+}
+
+/* Thanks (success / done) */
+.thanks {
+  border-radius: 22px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(var(--ink), 0.10);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.bigIcon {
+  width: 64px;
+  height: 64px;
+  border-radius: 24px;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 900;
+  font-size: 30px;
+  background: linear-gradient(135deg, rgba(var(--piano), 1), rgba(var(--piano2), 1));
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: var(--shadow-sm);
+}
+
+.thanksTitle {
+  font-weight: 860;
+  letter-spacing: -0.01em;
+  font-size: 18px;
+}
+
+.thanksSub {
+  font-size: 13px;
+  font-weight: 650;
+  opacity: 0.84;
+}
+
+.thanksMicro {
+  font-size: 12.5px;
+  opacity: 0.72;
+  line-height: 1.5;
+  max-width: 56ch;
+}
+
+.thanksActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+/* Side */
+.side {
+  position: relative;
+}
+
+.sideCard {
+  border-radius: var(--radius-xl);
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(var(--ink), 0.10);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: 12px;
+  position: sticky;
+  top: 16px;
+}
+
+@media (max-width: 980px) {
+  .sideCard {
+    position: static;
+  }
+}
+
+.sideTitle {
+  font-weight: 780;
+  letter-spacing: -0.01em;
 }
 
 .companyRow {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
 }
 
 .companyLogo {
-  width: 92px;
-  height: 58px;
+  width: 44px;
+  height: 44px;
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid rgba(15, 23, 42, 0.12);
-  background: rgba(255, 255, 255, 0.55);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
+  background: linear-gradient(135deg, rgba(var(--piano), 1), rgba(var(--piano2), 1));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  place-items: center;
 }
 
 .companyLogo img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  padding: 10px;
+  object-fit: cover;
+}
+
+.companyInitial {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 840;
+}
+
+.companyText {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
 }
 
 .companyName {
-  font-weight: 950;
-  font-size: 14px;
-  line-height: 1.1;
+  font-weight: 780;
+  letter-spacing: -0.01em;
 }
 
 .companyMeta {
-  margin-top: 2px;
-  font-size: 12px;
+  font-size: 12.5px;
   opacity: 0.72;
-  font-weight: 800;
-  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 360px;
 }
 
-.toastOk {
-  margin-top: 12px;
-  border-radius: 18px;
-  padding: 12px;
-  border: 1px solid rgba(var(--brand-teal), 0.25);
-  background: rgba(var(--brand-teal), 0.12);
-  font-weight: 950;
-  color: rgba(6, 95, 70, 0.95);
+.infoGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
-.toastErr {
-  margin-top: 12px;
+@media (max-width: 980px) {
+  .infoGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.infoItem {
   border-radius: 18px;
   padding: 12px;
-  border: 1px solid rgba(239, 68, 68, 0.22);
-  background: rgba(239, 68, 68, 0.10);
-  font-weight: 950;
-  color: rgba(127, 29, 29, 0.95);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(var(--ink), 0.10);
+  box-shadow: var(--shadow-sm);
+}
+
+.infoLabel {
+  font-size: 12px;
+  opacity: 0.70;
+  font-weight: 720;
+}
+
+.infoValue {
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 740;
+  letter-spacing: -0.01em;
+}
+
+.sideHint {
+  font-size: 12.5px;
+  opacity: 0.72;
+  line-height: 1.45;
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .centerCard,
+  .header,
+  .card,
+  .sideCard,
+  .thanks,
+  .signatureBox,
+  .pill,
+  .rutPill,
+  .infoItem {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+
+  .alert {
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+
+  .signatureBox {
+    background: rgba(255, 255, 255, 0.03);
+  }
 }

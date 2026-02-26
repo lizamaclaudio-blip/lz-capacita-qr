@@ -1,3 +1,5 @@
+/* MobileNavDrawer — Executive (Piano Black) */
+
 .backdrop {
   position: fixed;
   inset: 0;
@@ -48,15 +50,19 @@
   gap: 10px;
 }
 
-.logo {
+.logoBox {
   width: 42px;
   height: 42px;
   border-radius: 16px;
-  border: 1px solid rgba(var(--ink), 0.10);
-  background: rgba(255,255,255,.75);
-  padding: 8px;
-  object-fit: contain;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(var(--piano), 1), rgba(var(--piano2), 1));
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: var(--shadow-sm);
+}
+
+.logoImg {
+  object-fit: cover;
 }
 
 .brandText {
@@ -66,44 +72,45 @@
 
 .title {
   font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
-  font-weight: 950;
+  font-weight: 760;
   font-size: 13px;
+  letter-spacing: -0.02em;
 }
 
 .sub {
-  font-weight: 850;
+  font-weight: 600;
   font-size: 12px;
-  opacity: .70;
+  opacity: 0.70;
 }
 
 .close {
   border-radius: 14px;
   padding: 10px 12px;
   border: 1px solid rgba(var(--ink), 0.10);
-  background: rgba(255,255,255,.22);
+  background: rgba(255, 255, 255, 0.22);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
-  font-weight: 950;
+  font-weight: 720;
 }
 
 .user {
   border-radius: 18px;
   padding: 12px;
   border: 1px solid rgba(var(--ink), 0.08);
-  background: rgba(255,255,255,.50);
+  background: rgba(255, 255, 255, 0.50);
   box-shadow: var(--shadow-sm);
 }
 
 .userName {
-  font-weight: 950;
+  font-weight: 740;
   font-size: 13px;
 }
 
 .userEmail {
   margin-top: 2px;
-  font-weight: 800;
+  font-weight: 600;
   font-size: 12px;
-  opacity: .72;
+  opacity: 0.72;
 }
 
 .list {
@@ -115,20 +122,30 @@
   border-radius: 18px;
   padding: 12px 12px;
   border: 1px solid rgba(var(--ink), 0.08);
-  background: rgba(255,255,255,.46);
+  background: rgba(255, 255, 255, 0.46);
   box-shadow: var(--shadow-sm);
   text-decoration: none;
   color: inherit;
-  font-weight: 950;
+  font-weight: 650;
   font-size: 13px;
-  opacity: .88;
+  opacity: 0.88;
+  transition: opacity 0.12s ease, background 0.12s ease, transform 0.08s ease;
+}
+
+.item:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.item:active {
+  transform: translateY(1px);
 }
 
 .itemActive {
   opacity: 1;
   color: white;
-  border-color: rgba(var(--brand-teal), 0.22);
-  background: linear-gradient(135deg, rgba(var(--brand-indigo), 1), rgba(var(--brand-teal), 1));
+  border-color: rgba(var(--accent), 0.22);
+  background: linear-gradient(135deg, rgba(var(--piano), 1), rgba(var(--piano2), 1));
 }
 
 .bottom {
@@ -141,7 +158,28 @@
   padding: 12px;
   border: 1px solid rgba(239, 68, 68, 0.22);
   background: rgba(239, 68, 68, 0.10);
-  font-weight: 950;
+  font-weight: 720;
   color: rgba(127, 29, 29, 0.95);
   cursor: pointer;
+}
+
+@media (prefers-color-scheme: dark) {
+  .drawer {
+    border-right: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .close {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .user {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .item {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .item:hover {
+    background: rgba(255, 255, 255, 0.10);
+  }
 }

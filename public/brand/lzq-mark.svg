@@ -1,0 +1,26 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="12" y1="8" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14161D"/>
+      <stop offset="1" stop-color="#07080C"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Piano black tile -->
+  <rect x="4" y="4" width="56" height="56" rx="18" fill="url(#g)"/>
+
+  <!-- Scan frame corners (QR) -->
+  <path d="M20 18H16V28" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 18H48V28" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 46H16V36" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 46H48V36" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Minimal monogram "LZ" (stroke only) -->
+  <path d="M23 24V40H33" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M41 24H35.5L41 32L35.5 40H41" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Data pixels (big data) -->
+  <rect x="18.5" y="31" width="3.2" height="3.2" rx="0.7" fill="rgba(255,255,255,0.85)"/>
+  <rect x="43.1" y="29" width="3.2" height="3.2" rx="0.7" fill="rgba(255,255,255,0.68)"/>
+  <rect x="41.4" y="36.5" width="2.6" height="2.6" rx="0.6" fill="rgba(255,255,255,0.55)"/>
+</svg>

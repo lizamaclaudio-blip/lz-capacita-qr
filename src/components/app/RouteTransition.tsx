@@ -17,7 +17,9 @@ export default function RouteTransition({
   // Opcional: al cambiar de pantalla, subir al inicio (se siente más “app”)
   useEffect(() => {
     // Si no lo quieres, borra este useEffect completo.
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    // En modo workspace, scrolleamos el contenedor interno (no la ventana).
+    const el = document.querySelector<HTMLElement>("[data-app-scroll]");
+    if (el) el.scrollTo({ top: 0, behavior: "smooth" });
   }, [pathname]);
 
   return (

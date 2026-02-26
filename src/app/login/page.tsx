@@ -1,185 +1,208 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import styles from "./page.module.css";
 
-function safeNext(next: string | null) {
-  if (!next) return null;
-  if (next.startsWith("/") && !next.startsWith("//")) return next;
-  return null;
+function isEmail(v: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
 
-function LoginInner() {
-  const router = useRouter();
-  const sp = useSearchParams();
-
-  const next = safeNext(sp.get("next"));
-  const eParam = sp.get("e");
-
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPass, setShowPass] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(eParam ? decodeURIComponent(eParam) : null);
-
-  async function handleLogin() {
-    if (loading) return;
-    setErr(null);
-    setLoading(true);
-
-    try {
-      const { error } = await supabaseBrowser.auth.signInWithPassword({
-        email: email.trim(),
-        password,
-      });
-
-      if (error) {
-        setErr(error.message);
-        setLoading(false);
-        return;
-      }
-
-      setLoading(false);
-      router.replace(next || "/app");
-    } catch (e: any) {
-      setLoading(false);
-      setErr(e?.message || "Error inesperado al iniciar sesión");
-    }
-  }
-
-  return (
-    <div className={styles.page}>
-      <div className={styles.grid}>
-        {/* LEFT - “marketing” */}
-        <aside className={styles.left}>
-          <div className={styles.brandRow}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className={styles.logo} src="/brand/lz-capacita-qr.png" alt="LZ Capacita QR" />
-            <div className={styles.brandText}>
-              <div className={styles.brandTitle}>LZ Capacita QR</div>
-              <div className={styles.brandSub}>QR · Firma · PDF Final</div>
-            </div>
-          </div>
-
-          <h1 className={styles.h1}>
-            Capacita, firma y respalda
-            <br />
-            <span className={styles.h1Strong}>sin planillas.</span>
-          </h1>
-
-          <p className={styles.p}>
-            Accede al panel para gestionar empresas, charlas y asistentes. Cierra con firma del relator y genera un PDF
-            final listo para auditoría.
-          </p>
-
-          <div className={styles.bullets}>
-            <div className={styles.bullet}>✅ RUT + DV validado</div>
-            <div className={styles.bullet}>✅ Antiduplicados</div>
-            <div className={styles.bullet}>✅ Firma asistentes + relator</div>
-            <div className={styles.bullet}>✅ PDF consolidado con logo</div>
-          </div>
-
-          <div className={styles.miniCta}>
-            <Link href="/signup" className="btn btnCta">
-              Probar demo
-            </Link>
-            <a className="btn btnGhost" href="/">
-              Ver landing
-            </a>
-          </div>
-
-          <div className={styles.foot}>Creado por Claudio Lizama © 2026</div>
-        </aside>
-
-        {/* RIGHT - form */}
-        <section className={styles.right}>
-          <div className={styles.card}>
-            <div className={styles.cardHead}>
-              <div className={styles.cardTitle}>Iniciar sesión</div>
-              <div className={styles.cardSub}>Ingresa con tu correo y contraseña</div>
-            </div>
-
-            {err && <div className={styles.errBox}>{err}</div>}
-
-            <div className={styles.form}>
-              <div className={styles.field}>
-                <label className={styles.label}>Correo</label>
-                <input
-                  className="input"
-                  placeholder="correo@ejemplo.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  inputMode="email"
-                  required
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleLogin();
-                  }}
-                />
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Contraseña</label>
-
-                <div className={styles.passRow}>
-                  <input
-                    className="input"
-                    placeholder="Contraseña"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    type={showPass ? "text" : "password"}
-                    autoComplete="current-password"
-                    required
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleLogin();
-                    }}
-                  />
-
-                  <button
-                    type="button"
-                    className="btn btnGhost"
-                    onClick={() => setShowPass((v) => !v)}
-                    title={showPass ? "Ocultar contraseña" : "Mostrar contraseña"}
-                    style={{ padding: "11px 12px" }}
-                  >
-                    {showPass ? "🙈" : "👁️"}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={handleLogin}
-                disabled={loading}
-                className="btn btnPrimary"
-                style={{ width: "100%" }}
-              >
-                {loading ? "Entrando..." : "Entrar"}
-              </button>
-
-              <div className={styles.alt}>
-                ¿No tienes cuenta?{" "}
-                <Link className={styles.link} href="/signup">
-                  Crear cuenta
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          <div className={styles.mobileFoot}>LZ Capacita QR © 2026</div>
-        </section>
-      </div>
-    </div>
-  );
+function normalizeLoginEmail(raw: string) {
+  const v = raw.trim().toLowerCase();
+  // UX: permitir escribir solo "demo" para entrar al usuario demo.
+  if (v === "demo") return "demo@lzcapacitqr.cl";
+  return v;
 }
 
 export default function LoginPage() {
+  const router = useRouter();
+  const sp = useSearchParams();
+
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [err, setErr] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  const redirectTo = useMemo(() => sp.get("redirect") || "/app", [sp]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabaseBrowser.auth.getSession();
+      if (data.session) {
+        router.replace(redirectTo);
+        return;
+      }
+      setLoading(false);
+    })();
+  }, [router, redirectTo]);
+
+  useEffect(() => {
+    const e = sp.get("e");
+    if (e) setErr(e);
+    const m = sp.get("m");
+    if (m) setOk(m);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    setOk(null);
+
+    const em = normalizeLoginEmail(email);
+    if (!em) {
+      setErr("Ingresa tu email.");
+      return;
+    }
+    if (!isEmail(em)) {
+      setErr("Email inválido.");
+      return;
+    }
+    if (!password) {
+      setErr("Ingresa tu contraseña.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { error } = await supabaseBrowser.auth.signInWithPassword({
+        email: em,
+        password,
+      });
+      if (error) throw new Error(error.message);
+
+      router.replace(redirectTo);
+    } catch (e: any) {
+      setErr(e?.message || "No se pudo iniciar sesión");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function resetPassword() {
+    setErr(null);
+    setOk(null);
+
+    const em = normalizeLoginEmail(email);
+    if (!em) {
+      setErr("Ingresa tu email para enviar el enlace de recuperación.");
+      return;
+    }
+    if (!isEmail(em)) {
+      setErr("Email inválido.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { error } = await supabaseBrowser.auth.resetPasswordForEmail(em, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw new Error(error.message);
+
+      setOk("✅ Te enviamos un correo para recuperar tu contraseña.");
+    } catch (e: any) {
+      setErr(e?.message || "No se pudo enviar el correo de recuperación");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <main className={styles.shell}>
+        <div className={styles.card}>
+          <div className={styles.title}>Cargando…</div>
+          <div className={styles.sub}>Preparando acceso</div>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <Suspense fallback={<div style={{ padding: 20, opacity: 0.7 }}>Cargando…</div>}>
-      <LoginInner />
-    </Suspense>
+    <main className={styles.shell}>
+      <div className={styles.wrap}>
+        <header className={styles.brandRow}>
+          <div className={styles.brandTitle}>LZ Capacita QR</div>
+          <div className={styles.brandSub}>Acceso ejecutivo · trazabilidad · evidencia</div>
+        </header>
+
+        <section className={styles.card}>
+          <div className={styles.head}>
+            <div>
+              <div className={styles.kicker}>Iniciar sesión</div>
+              <h1 className={styles.h1}>Bienvenido</h1>
+              <p className={styles.p}>
+                Ingresa a tu panel para crear empresas, gestionar charlas y generar PDFs.
+              </p>
+            </div>
+
+            <div className={styles.sidePills}>
+              <span className={`${styles.pill} ${styles.pillMuted}`}>Secure</span>
+              <span className={`${styles.pill} ${styles.pillMuted}`}>Panel</span>
+            </div>
+          </div>
+
+          {err ? <div className={styles.errBox}>{err}</div> : null}
+          {ok ? <div className={styles.okBox}>{ok}</div> : null}
+
+          <form className={styles.form} onSubmit={submit}>
+            <div className={styles.field}>
+              <label className={styles.label}>Email</label>
+              <input
+                className="input"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="tu@email.com"
+                required
+              />
+            </div>
+
+            <div className={styles.field}>
+              <label className={styles.label}>Contraseña</label>
+              <input
+                className="input"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </div>
+
+            <div className={styles.actions}>
+              <button className="btn btnPrimary" type="submit" disabled={submitting}>
+                {submitting ? "Ingresando…" : "Ingresar"}
+              </button>
+
+              <button className="btn btnGhost" type="button" disabled={submitting} onClick={resetPassword}>
+                Recuperar contraseña
+              </button>
+            </div>
+          </form>
+
+          <div className={styles.bottom}>
+            <div className={styles.bottomText}>
+              ¿No tienes cuenta?{" "}
+              <Link className={styles.link} href="/signup">
+                Crear cuenta
+              </Link>
+            </div>
+
+            <div className={styles.bottomMini}>
+              Si estás con problemas de acceso, usa “Recuperar contraseña” (te enviará un link por correo).
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
   );
 }

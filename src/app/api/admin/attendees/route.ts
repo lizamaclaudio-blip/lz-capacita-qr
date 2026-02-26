@@ -4,7 +4,15 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseServer } from "@/lib/supabase/server";
-import { cleanRut } from "@/lib/rut";
+import { cleanRut, isValidRut } from "@/lib/rut";
+
+/**
+ * GET /api/admin/attendees?code=ABC123&passcode=12345678K
+ *
+ * Seguridad:
+ * - Si viene Bearer token y el usuario es dueño (sessions.owner_id) => OK sin passcode.
+ * - Si no viene token => valida passcode (sessions.admin_passcode), fallback opcional ADMIN_PASSCODE.
+ */
 
 function getBearer(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -31,11 +39,6 @@ async function getAuthedUserId(req: Request): Promise<string | null> {
   return data.user.id;
 }
 
-function normalizeCompany(session: any) {
-  const c = session?.companies;
-  return Array.isArray(c) ? c[0] : c;
-}
-
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
@@ -46,33 +49,26 @@ export async function GET(req: Request) {
 
     const sb = supabaseServer();
 
-    // Traemos sesión + empresa (incluye owner_id para validar si está logueado)
     const { data: session, error: sErr } = await sb
       .from("sessions")
-      .select("*, companies(owner_id, name, address, legal_name, rut, logo_path)")
+      .select("id, owner_id, code, admin_passcode")
       .eq("code", code)
       .single();
 
     if (sErr || !session) return NextResponse.json({ error: "Charla no existe" }, { status: 404 });
 
-    // ✅ 1) Si viene Bearer token y el usuario es dueño de la empresa => NO pide passcode
+    // Owner shortcut (optional)
     const authedUserId = await getAuthedUserId(req);
-    const company = normalizeCompany(session);
-    const ownerId = company?.owner_id ?? null;
-
-    const isOwner = !!authedUserId && !!ownerId && authedUserId === ownerId;
+    const isOwner = !!authedUserId && authedUserId === (session as any).owner_id;
 
     if (!isOwner) {
-      // ✅ 2) Si NO es owner (o no está logueado), mantiene la seguridad por passcode
-      if (!passcodeRaw) {
-        return NextResponse.json({ error: "Falta passcode (RUT relator)" }, { status: 401 });
-      }
-
-      const expected = session.admin_passcode ? cleanRut(String(session.admin_passcode)) : null;
+      // Passcode required
+      const expected = (session as any).admin_passcode ? cleanRut(String((session as any).admin_passcode)) : null;
       const provided = cleanRut(passcodeRaw);
 
-      // Si no hay admin_passcode aún, fallback a ADMIN_PASSCODE global (opcional)
       if (expected) {
+        if (!passcodeRaw) return NextResponse.json({ error: "Falta passcode (RUT relator)" }, { status: 401 });
+        if (!isValidRut(provided)) return NextResponse.json({ error: "RUT/passcode inválido" }, { status: 400 });
         if (provided !== expected) return NextResponse.json({ error: "RUT/passcode incorrecto" }, { status: 401 });
       } else {
         if (!process.env.ADMIN_PASSCODE || passcodeRaw !== process.env.ADMIN_PASSCODE) {
@@ -84,12 +80,12 @@ export async function GET(req: Request) {
     const { data: attendees, error: aErr } = await sb
       .from("attendees")
       .select("full_name, rut, role, created_at")
-      .eq("session_id", session.id)
+      .eq("session_id", (session as any).id)
       .order("created_at", { ascending: true });
 
     if (aErr) return NextResponse.json({ error: aErr.message }, { status: 500 });
 
-    return NextResponse.json({ session, attendees });
+    return NextResponse.json({ ok: true, attendees: attendees ?? [] });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Server error" }, { status: 500 });
   }

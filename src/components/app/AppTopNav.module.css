@@ -1,3 +1,5 @@
+/* AppTopNav — Executive (Piano Black) */
+
 .header {
   position: sticky;
   top: 10px;
@@ -34,15 +36,19 @@
   color: inherit;
 }
 
-.logo {
+.logoBox {
   width: 42px;
   height: 42px;
   border-radius: 16px;
-  border: 1px solid rgba(var(--ink), 0.10);
-  background: rgba(255,255,255,.75);
-  padding: 8px;
-  object-fit: contain;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(var(--piano), 1), rgba(var(--piano2), 1));
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: var(--shadow-sm);
+}
+
+.logoImg {
+  object-fit: cover;
 }
 
 .brandText {
@@ -52,15 +58,15 @@
 
 .brandTitle {
   font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
-  font-weight: 950;
+  font-weight: 760;
   font-size: 13px;
   letter-spacing: -0.02em;
 }
 
 .brandSub {
-  font-weight: 850;
+  font-weight: 600;
   font-size: 12px;
-  opacity: .70;
+  opacity: 0.70;
 }
 
 .tabs {
@@ -74,23 +80,28 @@
 .tab {
   text-decoration: none;
   color: inherit;
-  font-weight: 900;
+  font-weight: 650;
   font-size: 12px;
-  opacity: .82;
+  opacity: 0.84;
   border: 1px solid rgba(var(--ink), 0.10);
-  background: rgba(255,255,255,.22);
+  background: rgba(255, 255, 255, 0.22);
   padding: 9px 11px;
   border-radius: 999px;
-  transition: opacity .12s ease, background .12s ease, transform .08s ease;
+  transition: opacity 0.12s ease, background 0.12s ease, transform 0.08s ease;
 }
-.tab:hover { opacity: 1; background: rgba(255,255,255,.30); }
-.tab:active { transform: translateY(1px); }
+.tab:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.30);
+}
+.tab:active {
+  transform: translateY(1px);
+}
 
 .tabActive {
   opacity: 1;
   color: white;
-  border-color: rgba(var(--brand-teal), 0.22);
-  background: linear-gradient(135deg, rgba(var(--brand-indigo), 1), rgba(var(--brand-teal), 1));
+  border-color: rgba(var(--accent), 0.22);
+  background: linear-gradient(135deg, rgba(var(--piano), 1), rgba(var(--piano2), 1));
 }
 
 .right {
@@ -104,24 +115,28 @@
   border-radius: 999px;
   padding: 9px 12px;
   border: 1px solid rgba(var(--ink), 0.10);
-  background: rgba(255,255,255,.22);
+  background: rgba(255, 255, 255, 0.22);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
-  font-weight: 900;
+  font-weight: 650;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  transition: background .12s ease, transform .08s ease;
+  transition: background 0.12s ease, transform 0.08s ease;
 }
-.userBtn:hover { background: rgba(255,255,255,.30); }
-.userBtn:active { transform: translateY(1px); }
+.userBtn:hover {
+  background: rgba(255, 255, 255, 0.30);
+}
+.userBtn:active {
+  transform: translateY(1px);
+}
 
 .userDot {
   width: 10px;
   height: 10px;
   border-radius: 999px;
-  background: rgba(var(--brand-amber), 0.95);
-  box-shadow: 0 0 0 6px rgba(var(--brand-amber), 0.15);
+  background: rgba(var(--accent), 0.95);
+  box-shadow: 0 0 0 6px rgba(var(--accent), 0.14);
 }
 
 .userName {
@@ -129,11 +144,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  opacity: .90;
+  opacity: 0.90;
 }
 
 .userChevron {
-  opacity: .60;
+  opacity: 0.60;
   font-size: 12px;
 }
 
@@ -152,19 +167,19 @@
 .menuHead {
   padding: 10px;
   border-radius: 14px;
-  background: rgba(255,255,255,.50);
+  background: rgba(255, 255, 255, 0.50);
   border: 1px solid rgba(var(--ink), 0.08);
 }
 
 .menuName {
-  font-weight: 950;
+  font-weight: 740;
   font-size: 13px;
 }
 .menuEmail {
   margin-top: 2px;
-  font-weight: 800;
+  font-weight: 600;
   font-size: 12px;
-  opacity: .72;
+  opacity: 0.72;
 }
 
 .menuItem {
@@ -175,12 +190,15 @@
   border-radius: 14px;
   padding: 10px;
   border: 1px solid rgba(var(--ink), 0.08);
-  background: rgba(255,255,255,.46);
-  font-weight: 900;
+  background: rgba(255, 255, 255, 0.46);
+  font-weight: 650;
   font-size: 12px;
-  opacity: .86;
+  opacity: 0.88;
 }
-.menuItem:hover { opacity: 1; background: rgba(255,255,255,.56); }
+.menuItem:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.56);
+}
 
 .sep {
   height: 1px;
@@ -194,7 +212,7 @@
   padding: 10px;
   border: 1px solid rgba(239, 68, 68, 0.22);
   background: rgba(239, 68, 68, 0.10);
-  font-weight: 950;
+  font-weight: 720;
   color: rgba(127, 29, 29, 0.95);
   cursor: pointer;
 }
@@ -204,7 +222,7 @@
   height: 42px;
   border-radius: 16px;
   border: 1px solid rgba(var(--ink), 0.10);
-  background: rgba(255,255,255,.22);
+  background: rgba(255, 255, 255, 0.22);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   display: none;
@@ -222,9 +240,52 @@
   border-radius: 999px;
 }
 
+@media (prefers-color-scheme: dark) {
+  .nav {
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .tab {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .tab:hover {
+    background: rgba(255, 255, 255, 0.10);
+  }
+  .userBtn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .userBtn:hover {
+    background: rgba(255, 255, 255, 0.10);
+  }
+  .menuHead,
+  .menuItem {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .menuItem:hover {
+    background: rgba(255, 255, 255, 0.10);
+  }
+  .burger {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+  .burger span {
+    background: rgba(236, 244, 255, 0.72);
+  }
+}
+
 @media (max-width: 860px) {
-  .tabs { display: none; }
-  .burger { display: inline-flex; }
-  .left { min-width: 0; }
-  .right { min-width: 0; }
+  .tabs {
+    display: none;
+  }
+  .burger {
+    display: inline-flex;
+  }
+  .left {
+    min-width: 0;
+  }
+  .right {
+    min-width: 0;
+  }
 }

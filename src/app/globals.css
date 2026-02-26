@@ -1,62 +1,80 @@
 @import "tailwindcss";
 
-/* =========================
-   LZ Capacita QR – SaaS Theme (Blue/Navy + Orange)
-   ========================= */
+/* =========================================
+   LZ Capacita QR – Executive (Piano Black)
+   Objetivo: seriedad, trazabilidad, "compliance".
+   ========================================= */
 
 :root {
-  /* Brand */
-  --brand-indigo: 10, 28, 58;   /* navy */
-  --brand-teal: 37, 99, 235;    /* blue */
-  --brand-amber: 249, 115, 22;  /* orange */
+  /* Core neutrals */
+  --ink: 12, 14, 18;         /* text */
+  --muted: 100, 116, 139;    /* secondary */
 
-  /* Neutrals */
-  --ink: 10, 28, 58;
-  --muted: 100, 116, 139;
+  /* Piano black system (para hero/impact) */
+  --piano: 10, 11, 15;       /* #0A0B0F */
+  --piano2: 4, 6, 10;        /* deeper */
+
+  /* One accent only (clean, executive) */
+  --accent: 56, 189, 248;    /* electric blue (no green) */
+
+  /* Chart tones (para que cada gráfico tenga un color distinto) */
+  --tone-blue: 56, 189, 248;
+  --tone-indigo: 99, 102, 241;
+  --tone-teal: 20, 184, 166;
+  --tone-amber: 245, 158, 11;
 
   /* Background */
-  --bg0: 248, 250, 255;
-  --bg1: 242, 246, 255;
+  --bg0: 248, 250, 252;
+  --bg1: 241, 245, 249;
 
-  /* Surface */
-  --surface: rgba(255, 255, 255, 0.92);
-  --surface-2: rgba(255, 255, 255, 0.78);
-  --border: rgba(10, 28, 58, 0.10);
+  /* Surfaces */
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-2: rgba(255, 255, 255, 0.62);
+  --border: rgba(12, 14, 18, 0.10);
 
   /* Radius & shadows */
   --radius-xl: 26px;
   --radius-lg: 18px;
   --radius-md: 14px;
 
-  --shadow-sm: 0 8px 18px rgba(2, 6, 23, 0.08);
-  --shadow-md: 0 16px 44px rgba(2, 6, 23, 0.12);
+  --shadow-sm: 0 10px 24px rgba(2, 6, 23, 0.10);
+  --shadow-md: 0 18px 70px rgba(2, 6, 23, 0.14);
 
-  --focus: rgba(var(--brand-teal), 0.22);
+  --focus: rgba(var(--accent), 0.22);
 
   --text: rgb(var(--ink));
-  --text-muted: rgba(var(--ink), .72);
+  --text-muted: rgba(var(--ink), 0.70);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg0: 6, 10, 18;
-    --bg1: 4, 8, 14;
+    --bg0: 6, 8, 12;
+    --bg1: 4, 6, 10;
 
-    --surface: rgba(12, 18, 32, 0.78);
-    --surface-2: rgba(12, 18, 32, 0.62);
+    --surface: rgba(12, 14, 18, 0.70);
+    --surface-2: rgba(12, 14, 18, 0.56);
     --border: rgba(255, 255, 255, 0.10);
 
-    --shadow-sm: 0 10px 26px rgba(0,0,0,.45);
-    --shadow-md: 0 18px 60px rgba(0,0,0,.55);
+    --shadow-sm: 0 16px 40px rgba(0, 0, 0, 0.40);
+    --shadow-md: 0 26px 90px rgba(0, 0, 0, 0.55);
 
     --text: rgb(236, 244, 255);
-    --text-muted: rgba(236, 244, 255, .72);
+    --text-muted: rgba(236, 244, 255, 0.72);
   }
 }
 
-* { box-sizing: border-box; }
-html, body { height: 100%; }
-html { scroll-behavior: smooth; }
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+html {
+  scroll-behavior: smooth;
+}
 
 body {
   color: var(--text);
@@ -65,13 +83,15 @@ body {
   background: linear-gradient(180deg, rgb(var(--bg0)) 0%, rgb(var(--bg1)) 100%);
 }
 
-/* Headings default “SaaS pro” */
-h1, h2, h3 {
+/* Headings */
+h1,
+h2,
+h3 {
   font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
   letter-spacing: -0.02em;
 }
 
-/* A cleaner “surface” look (datascope-ish) */
+/* Surfaces */
 .glass {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -83,14 +103,14 @@ h1, h2, h3 {
   padding: 16px;
 }
 
-/* Buttons */
+/* Buttons (menos negrita) */
 .btn {
   border-radius: var(--radius-md);
   padding: 11px 14px;
-  font-weight: 800;
+  font-weight: 650;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: transform .08s ease, opacity .12s ease, box-shadow .12s ease, background .12s ease;
+  transition: transform 0.08s ease, opacity 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
@@ -99,54 +119,80 @@ h1, h2, h3 {
   line-height: 1;
   user-select: none;
 }
-.btn:active { transform: translateY(1px); }
+
+.btn:active {
+  transform: translateY(1px);
+}
 
 .btnPrimary {
   color: white;
-  background: linear-gradient(135deg, rgba(var(--brand-indigo), 1), rgba(var(--brand-teal), 1));
-  box-shadow: 0 18px 34px rgba(37, 99, 235, .18);
+  background: linear-gradient(135deg, rgba(var(--piano), 1), rgba(var(--piano2), 1));
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.22);
+  border-color: rgba(255, 255, 255, 0.10);
 }
-.btnPrimary:hover { opacity: .95; }
+
+.btnPrimary:hover {
+  opacity: 0.96;
+}
 
 .btnCta {
-  color: rgb(12, 18, 32);
-  background: linear-gradient(135deg, rgba(var(--brand-amber), 1), rgba(var(--brand-amber), .72));
-  box-shadow: 0 18px 34px rgba(249, 115, 22, .22);
+  color: rgb(var(--ink));
+  background: linear-gradient(135deg, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0.80));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.10);
+  border-color: rgba(12, 14, 18, 0.12);
 }
-.btnCta:hover { opacity: .95; }
+
+.btnCta:hover {
+  opacity: 0.96;
+}
 
 .btnGhost {
   color: var(--text);
-  background: rgba(255,255,255,.20);
+  background: rgba(255, 255, 255, 0.20);
   border-color: rgba(var(--ink), 0.12);
   box-shadow: var(--shadow-sm);
 }
-.btnGhost:hover { background: rgba(255,255,255,.28); }
 
+.btnGhost:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.btnDanger {
+  color: white;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 1), rgba(185, 28, 28, 1));
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow: 0 18px 50px rgba(239, 68, 68, 0.18);
+}
+
+.btnDanger:hover {
+  opacity: 0.95;
+}
+
+/* Inputs */
 .input {
   width: 100%;
   border-radius: var(--radius-md);
   padding: 11px 12px;
-  border: 1px solid rgba(15,23,42,.12);
-  background: rgba(255,255,255,.84);
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.84);
   outline: none;
 }
+
 .input:focus {
-  border-color: rgba(var(--brand-teal), .55);
+  border-color: rgba(var(--accent), 0.60);
   box-shadow: 0 0 0 4px var(--focus);
 }
 
-/* =========================
-   Fondo bicolor “media luna”
-   ========================= */
+/* =========================================
+   Background blobs (neutral, less colorful)
+   ========================================= */
 
 .blob {
   position: absolute;
   width: 980px;
   height: 520px;
   filter: blur(26px);
-  opacity: 0.26;
-  mix-blend-mode: multiply;
+  opacity: 0.18;
 }
 
 .blob-1 {
@@ -155,9 +201,9 @@ h1, h2, h3 {
   border-radius: 9999px 9999px 0 0;
   background: radial-gradient(
     circle at 50% 92%,
-    rgba(var(--brand-indigo), .70) 0%,
-    rgba(var(--brand-indigo), .14) 55%,
-    rgba(var(--brand-indigo), 0) 72%
+    rgba(var(--piano), 0.70) 0%,
+    rgba(var(--piano), 0.12) 55%,
+    rgba(var(--piano), 0) 72%
   );
   transform: rotate(-8deg);
   animation: float1 14s ease-in-out infinite;
@@ -169,9 +215,9 @@ h1, h2, h3 {
   border-radius: 0 0 9999px 9999px;
   background: radial-gradient(
     circle at 50% 10%,
-    rgba(var(--brand-amber), .70) 0%,
-    rgba(var(--brand-amber), .14) 55%,
-    rgba(var(--brand-amber), 0) 72%
+    rgba(var(--accent), 0.44) 0%,
+    rgba(var(--accent), 0.10) 55%,
+    rgba(var(--accent), 0) 72%
   );
   transform: rotate(10deg);
   animation: float2 16s ease-in-out infinite;
@@ -185,24 +231,41 @@ h1, h2, h3 {
   border-radius: 0 0 9999px 9999px;
   background: radial-gradient(
     circle at 50% 10%,
-    rgba(var(--brand-teal), .42) 0%,
-    rgba(var(--brand-teal), .08) 55%,
-    rgba(var(--brand-teal), 0) 72%
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.06) 55%,
+    rgba(255, 255, 255, 0) 72%
   );
-  opacity: 0.14;
+  opacity: 0.10;
   transform: rotate(6deg);
   animation: float3 18s ease-in-out infinite;
 }
 
 @keyframes float1 {
-  0%, 100% { transform: rotate(-8deg) translate(0, 0) scale(1); }
-  50%      { transform: rotate(-8deg) translate(80px, 30px) scale(1.04); }
+  0%,
+  100% {
+    transform: rotate(-8deg) translate(0, 0) scale(1);
+  }
+  50% {
+    transform: rotate(-8deg) translate(80px, 30px) scale(1.04);
+  }
 }
+
 @keyframes float2 {
-  0%, 100% { transform: rotate(10deg) translate(0, 0) scale(1); }
-  50%      { transform: rotate(10deg) translate(-70px, -20px) scale(1.05); }
+  0%,
+  100% {
+    transform: rotate(10deg) translate(0, 0) scale(1);
+  }
+  50% {
+    transform: rotate(10deg) translate(-70px, -20px) scale(1.05);
+  }
 }
+
 @keyframes float3 {
-  0%, 100% { transform: rotate(6deg) translate(0, 0) scale(1); }
-  50%      { transform: rotate(6deg) translate(30px, 34px) scale(1.04); }
+  0%,
+  100% {
+    transform: rotate(6deg) translate(0, 0) scale(1);
+  }
+  50% {
+    transform: rotate(6deg) translate(30px, 34px) scale(1.04);
+  }
 }

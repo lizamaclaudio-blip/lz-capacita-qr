@@ -353,7 +353,7 @@ export default function WorkerDetailPage() {
                       <td>
                         <div className={styles.actionsRow}>
                           <button type="button" className="btn" onClick={() => openQr(code)}>QR</button>
-                          <button type="button" className="btn" onClick={() => openAdmin(code)}>Admin</button>
+                          <button type="button" className="btn" onClick={() => openAdmin(code)}>Firmar</button>
                           {h.pdf_path ? (
                             <button type="button" className="btn btnCta" onClick={() => openPdf(String(h.pdf_path))}>
                               PDF
@@ -362,8 +362,8 @@ export default function WorkerDetailPage() {
                           <button type="button" className="btn" onClick={() => copyText(publicUrl, "Ruta QR copiada ✅")}>
                             Copiar QR
                           </button>
-                          <button type="button" className="btn" onClick={() => copyText(adminUrl, "Ruta Admin copiada ✅")}>
-                            Copiar Admin
+                          <button type="button" className="btn" onClick={() => copyText(adminUrl, "Ruta Firmar copiada ✅")}>
+                            Copiar Firmar
                           </button>
                         </div>
                       </td>

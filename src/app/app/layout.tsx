@@ -6,6 +6,8 @@ import RouteTransition from "@/components/app/RouteTransition";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import AppTopNav from "@/components/app/AppTopNav";
 import MobileNavDrawer from "@/components/app/MobileNavDrawer";
+import WorkspaceSidebar from "@/components/app/WorkspaceSidebar";
+import DailyTipBanner from "@/components/app/DailyTipBanner";
 import styles from "./layout.module.css";
 
 function buildGreetingName(user: any) {
@@ -24,7 +26,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(true);
   const [email, setEmail] = useState<string | null>(null);
   const [greetingName, setGreetingName] = useState<string | null>(null);
-
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
@@ -59,30 +60,55 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const subtitle = useMemo(() => "Panel LZ Capacita QR", []);
 
   if (checking) {
-    return <div className={styles.loading}>Cargando panel…</div>;
+    return (
+      <div className={styles.loadingShell}>
+        <div className={styles.loadingCard}>
+          <div className={styles.loadingTitle}>Cargando panel…</div>
+          <div className={styles.loadingSub}>Verificando sesión</div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className={styles.shell}>
-      <AppTopNav
-        greetingName={greetingName}
-        email={email}
-        subtitle={subtitle}
-        onLogout={logout}
-        onOpenMobile={() => setMobileOpen(true)}
-      />
+      {/* Desktop sidebar (siempre render, CSS decide) */}
+      <div className={styles.desktopSide}>
+        <WorkspaceSidebar greetingName={greetingName} email={email} onLogout={logout} />
+      </div>
 
-      <MobileNavDrawer
-        open={mobileOpen}
-        onClose={() => setMobileOpen(false)}
-        email={email}
-        greetingName={greetingName}
-        onLogout={logout}
-      />
+      <div className={styles.right}>
+        {/* Mobile topbar (siempre render, CSS decide) */}
+        <div className={styles.mobileTop}>
+          <AppTopNav
+            greetingName={greetingName}
+            email={email}
+            subtitle={subtitle}
+            onLogout={logout}
+            onOpenMobile={() => setMobileOpen(true)}
+          />
+        </div>
 
-      <main className={styles.main}>
-        <RouteTransition>{children}</RouteTransition>
-      </main>
+        <MobileNavDrawer
+          open={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+          email={email}
+          greetingName={greetingName}
+          onLogout={logout}
+        />
+
+        <main className={styles.main}>
+          <div className={styles.mainInner}>
+            <DailyTipBanner />
+          </div>
+
+          <div className={styles.scroller} data-app-scroll>
+            <div className={styles.mainInner}>
+              <RouteTransition>{children}</RouteTransition>
+            </div>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }

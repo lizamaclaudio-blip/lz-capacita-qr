@@ -421,7 +421,7 @@ export default function CompanyDetailPage() {
           <div className={styles.panelHead}>
             <div>
               <div className={styles.panelTitle}>Charlas</div>
-              <div className={styles.panelSub}>Links QR/Admin + cierre + PDF final</div>
+              <div className={styles.panelSub}>Links QR/Firmar + cierre + PDF final</div>
             </div>
 
             <div className={styles.panelActions}>
@@ -475,8 +475,8 @@ export default function CompanyDetailPage() {
                       <button className={styles.smallBtn} type="button" onClick={() => copyText(publicUrl, "Link QR copiado ✅")}>
                         📎 QR
                       </button>
-                      <button className={styles.smallBtn} type="button" onClick={() => copyText(adminUrl, "Link Admin copiado ✅")}>
-                        📎 Admin
+                      <button className={styles.smallBtn} type="button" onClick={() => copyText(adminUrl, "Link Firmar copiado ✅")}>
+                        📎 Firmar
                       </button>
 
                       <button className={styles.smallBtn} type="button" onClick={() => openQr(code)}>

@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
     const { data: sessions, error: sErr } = await auth.supabase
       .from("sessions")
       .select(
-        "id, owner_id, company_id, code, topic, location, session_date, trainer_name, status, closed_at, created_at, pdf_path, pdf_generated_at, companies(id,name,address)"
+        "id, owner_id, company_id, code, topic, location, session_date, trainer_name, status, closed_at, created_at, pdf_path, pdf_generated_at, companies(id,name,address,logo_path,rut)"
       )
       .eq("owner_id", auth.user.id)
       .order("created_at", { ascending: false });
