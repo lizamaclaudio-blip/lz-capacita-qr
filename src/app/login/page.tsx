@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import styles from "./page.module.css";
@@ -12,12 +12,23 @@ function isEmail(v: string) {
 
 function normalizeLoginEmail(raw: string) {
   const v = raw.trim().toLowerCase();
-  // UX: permitir escribir solo "demo" para entrar al usuario demo.
+  // Permitir login escribiendo solo "demo"
   if (v === "demo") return "demo@lzcapacitqr.cl";
   return v;
 }
 
-export default function LoginPage() {
+function LoginSkeleton() {
+  return (
+    <main className={styles.shell}>
+      <div className={styles.card}>
+        <div className={styles.title}>Cargando…</div>
+        <div className={styles.sub}>Preparando acceso</div>
+      </div>
+    </main>
+  );
+}
+
+function LoginInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -30,7 +41,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const redirectTo = useMemo(() => sp.get("redirect") || "/app", [sp]);
+  const redirectTo = sp.get("redirect") || "/app";
 
   useEffect(() => {
     (async () => {
@@ -115,16 +126,7 @@ export default function LoginPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <main className={styles.shell}>
-        <div className={styles.card}>
-          <div className={styles.title}>Cargando…</div>
-          <div className={styles.sub}>Preparando acceso</div>
-        </div>
-      </main>
-    );
-  }
+  if (loading) return <LoginSkeleton />;
 
   return (
     <main className={styles.shell}>
@@ -158,10 +160,10 @@ export default function LoginPage() {
               <label className={styles.label}>Email</label>
               <input
                 className="input"
-                type="email"
+                type="text"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="tu@email.com"
+                placeholder="tu@email.com o demo"
                 required
               />
             </div>
@@ -204,5 +206,14 @@ export default function LoginPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  // ✅ FIX Next 16: useSearchParams debe estar dentro de Suspense en una page
+  return (
+    <Suspense fallback={<LoginSkeleton />}>
+      <LoginInner />
+    </Suspense>
   );
 }
