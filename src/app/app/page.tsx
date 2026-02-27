@@ -2,12 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
+import StatNumber from "@/components/app/StatNumber";
 import styles from "./page.module.css";
 
-type Company = {
-  id: string;
-  created_at?: string | null;
-};
+type Company = { id: string; created_at?: string | null };
 
 type Session = {
   id: string;
@@ -19,10 +17,7 @@ type Session = {
   pdf_path?: string | null;
 };
 
-type PdfItem = {
-  id: string;
-  pdf_generated_at?: string | null;
-};
+type PdfItem = { id: string; pdf_generated_at?: string | null };
 
 function fmtInt(n: number) {
   try {
@@ -230,14 +225,6 @@ export default function AppDashboardPage() {
     [pdfs]
   );
 
-  if (loading) {
-    return (
-      <div className={styles.loading}>
-        <div className={styles.loadingCard}>Cargando dashboard…</div>
-      </div>
-    );
-  }
-
   if (err) {
     return (
       <div className={styles.loading}>
@@ -250,22 +237,22 @@ export default function AppDashboardPage() {
     <div className={styles.page}>
       <div className={styles.head}>
         <div>
-          <div className={styles.kicker}>Panel</div>
+          {/* ✅ eliminado: óvalo "Panel" */}
           <h1 className={styles.h1}>Dashboard</h1>
           <div className={styles.sub}>Empresas · Charlas · Evidencia (QR · firma · PDF)</div>
+          {loading ? <div className={styles.loadingInline}>Cargando datos…</div> : null}
         </div>
 
-        <div className={styles.actions}>
-          <a className="btn btnGhost" href="/app/companies/new">+ Empresa</a>
-          <a className="btn btnPrimary" href="/app/sessions/new">+ Charla</a>
-        </div>
+        {/* ✅ eliminado: botones + Empresa / + Charla */}
       </div>
 
       <div className={styles.grid}>
         <div className={styles.panel}>
           <div className={styles.panelHead}>
             <div className={styles.panelTitle}>Empresas</div>
-            <div className={styles.panelValue}>{fmtInt(stats.totalCompanies)}</div>
+            <div className={styles.valueBox}>
+              <StatNumber value={stats.totalCompanies} loading={loading} format={fmtInt} />
+            </div>
           </div>
           <TrendChart values={seriesCompanies} tone="indigo" />
         </div>
@@ -273,7 +260,9 @@ export default function AppDashboardPage() {
         <div className={styles.panel}>
           <div className={styles.panelHead}>
             <div className={styles.panelTitle}>Charlas</div>
-            <div className={styles.panelValue}>{fmtInt(stats.totalSessions)}</div>
+            <div className={styles.valueBox}>
+              <StatNumber value={stats.totalSessions} loading={loading} format={fmtInt} />
+            </div>
           </div>
           <TrendChart values={seriesSessions} tone="blue" />
         </div>
@@ -281,7 +270,9 @@ export default function AppDashboardPage() {
         <div className={styles.panel}>
           <div className={styles.panelHead}>
             <div className={styles.panelTitle}>Asistentes</div>
-            <div className={styles.panelValue}>{fmtInt(stats.totalAttendees)}</div>
+            <div className={styles.valueBox}>
+              <StatNumber value={stats.totalAttendees} loading={loading} format={fmtInt} />
+            </div>
           </div>
           <TrendChart values={seriesAttendees} tone="teal" />
         </div>
@@ -289,11 +280,13 @@ export default function AppDashboardPage() {
         <div className={styles.panel}>
           <div className={styles.panelHead}>
             <div className={styles.panelTitle}>PDFs</div>
-            <div className={styles.panelValue}>{fmtInt(stats.totalPdfs)}</div>
+            <div className={styles.valueBox}>
+              <StatNumber value={stats.totalPdfs} loading={loading} format={fmtInt} />
+            </div>
           </div>
           <TrendChart values={seriesPdfs} tone="amber" />
         </div>
       </div>
     </div>
   );
-}
+  }

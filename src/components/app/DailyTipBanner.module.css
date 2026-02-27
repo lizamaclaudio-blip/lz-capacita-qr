@@ -1,27 +1,40 @@
 .bar {
-  position: sticky;
-  top: 0;
-  z-index: 20;
+  position: relative;
+  z-index: 30;
+
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 
-  padding: 10px 12px;
-  margin-bottom: 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(12, 14, 18, 0.10);
-  background: rgba(255, 255, 255, 0.78);
-  box-shadow: 0 16px 50px rgba(2, 6, 23, 0.08);
-  backdrop-filter: blur(10px);
+  padding: 12px 16px;
+  margin: 0;
+  border-radius: 0 0 20px 20px;
+
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(900px 520px at 18% 0%, rgba(var(--accent), 0.35), transparent 56%),
+    radial-gradient(760px 420px at 88% 36%, rgba(99, 102, 241, 0.22), transparent 58%),
+    linear-gradient(180deg, rgba(6, 15, 35, 0.96) 0%, rgba(10, 28, 58, 0.96) 100%);
+
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: rgba(236, 244, 255, 0.94);
+
+  overflow: hidden;
 }
 
-@media (prefers-color-scheme: dark) {
-  .bar {
-    border: 1px solid rgba(255, 255, 255, 0.10);
-    background: rgba(12, 14, 18, 0.62);
-    box-shadow: 0 18px 70px rgba(0, 0, 0, 0.35);
-  }
+.bar::before {
+  content: "";
+  position: absolute;
+  inset: -40px -120px auto -120px;
+  height: 120px;
+  transform: rotate(-8deg);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.10), transparent);
+  opacity: 0.9;
+  pointer-events: none;
 }
 
 .left {
@@ -29,43 +42,135 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.idea {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 16px 34px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+.textBlock {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
 }
 
 .kicker {
   font-size: 12px;
-  font-weight: 720;
+  font-weight: 820;
   letter-spacing: -0.01em;
-  opacity: 0.85;
+  opacity: 0.90;
   white-space: nowrap;
 }
 
 .tip {
   min-width: 0;
-  font-size: 12.8px;
-  opacity: 0.92;
-  white-space: nowrap;
+  font-size: 12.9px;
+  line-height: 1.25;
+  opacity: 0.94;
+
+  white-space: normal;
   overflow: hidden;
   text-overflow: ellipsis;
+
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.lead {
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.96);
 }
 
 .right {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-}
-
-.btn {
-  border: 1px solid rgba(12, 14, 18, 0.12);
-  background: rgba(255, 255, 255, 0.55);
+  gap: 4px;
+  padding: 6px 10px;
   border-radius: 999px;
-  padding: 7px 10px;
-  font-size: 12px;
-  cursor: pointer;
+
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 16px 34px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
 }
 
-@media (prefers-color-scheme: dark) {
-  .btn {
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    background: rgba(255, 255, 255, 0.06);
+.face {
+  font-size: 15px;
+  transform-origin: 50% 80%;
+  animation: bounceFace 2.6s ease-in-out infinite;
+}
+
+.q {
+  font-size: 15px;
+  transform-origin: 50% 50%;
+  animation: wobbleQ 2.1s ease-in-out infinite;
+}
+
+@keyframes bounceFace {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  25%      { transform: translateY(-2px) rotate(-4deg); }
+  55%      { transform: translateY(1px) rotate(3deg); }
+}
+
+@keyframes wobbleQ {
+  0%, 100% { transform: rotate(0deg); opacity: 0.92; }
+  35%      { transform: rotate(10deg); opacity: 1; }
+  70%      { transform: rotate(-8deg); opacity: 0.95; }
+}
+
+/* ✅ Mobile: más compacto */
+@media (max-width: 520px) {
+  .bar {
+    padding: 10px 12px;
+    border-radius: 0 0 18px 18px;
+    gap: 10px;
+  }
+
+  .idea {
+    width: 30px;
+    height: 30px;
+    border-radius: 12px;
+    font-size: 15px;
+  }
+
+  .kicker {
+    display: none;
+  }
+
+  .tip {
+    font-size: 12.6px;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  .right {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .face,
+  .q {
+    animation: none !important;
   }
 }

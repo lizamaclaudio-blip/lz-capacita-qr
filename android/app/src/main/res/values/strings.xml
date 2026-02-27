@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">LZ Capacita QR</string>
+    <string name="title_activity_main">LZ Capacita QR</string>
+    <string name="package_name">cl.lz.capacitaqr</string>
+    <string name="custom_url_scheme">cl.lz.capacitaqr</string>
+</resources>

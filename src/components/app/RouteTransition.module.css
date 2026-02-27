@@ -2,6 +2,10 @@
   width: 100%;
   animation: rtIn 220ms ease-out both;
   will-change: transform, opacity, filter;
+
+  /* ✅ CLAVE para que páginas con scroll interno puedan tomar altura */
+  flex: 1;
+  min-height: 0;
 }
 
 @keyframes rtIn {

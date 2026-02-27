@@ -8,6 +8,7 @@ import AppTopNav from "@/components/app/AppTopNav";
 import MobileNavDrawer from "@/components/app/MobileNavDrawer";
 import WorkspaceSidebar from "@/components/app/WorkspaceSidebar";
 import DailyTipBanner from "@/components/app/DailyTipBanner";
+import MobileDock from "@/components/app/MobileDock";
 import styles from "./layout.module.css";
 
 function buildGreetingName(user: any) {
@@ -72,13 +73,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={styles.shell}>
-      {/* Desktop sidebar (siempre render, CSS decide) */}
       <div className={styles.desktopSide}>
         <WorkspaceSidebar greetingName={greetingName} email={email} onLogout={logout} />
       </div>
 
       <div className={styles.right}>
-        {/* Mobile topbar (siempre render, CSS decide) */}
         <div className={styles.mobileTop}>
           <AppTopNav
             greetingName={greetingName}
@@ -98,7 +97,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         />
 
         <main className={styles.main}>
-          <div className={styles.mainInner}>
+          <div className={styles.tipFull}>
             <DailyTipBanner />
           </div>
 
@@ -108,6 +107,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         </main>
+
+        {/* ✅ Dock inferior en mobile */}
+        <MobileDock />
       </div>
     </div>
   );

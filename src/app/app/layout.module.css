@@ -6,6 +6,9 @@
   display: grid;
   grid-template-columns: 252px minmax(0, 1fr);
   background: transparent;
+
+  /* ✅ altura dock: desktop 0 */
+  --dock-h: 0px;
 }
 
 .desktopSide {
@@ -69,23 +72,33 @@
   gap: 10px;
 }
 
+/* ✅ aire abajo + safe-area + dock (solo mobile) */
 .scroller {
   height: 100%;
   min-height: 0;
-  overflow: auto; /* scroll interno */
+  overflow: auto;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
+
+  padding-bottom: calc(34px + var(--dock-h) + env(safe-area-inset-bottom));
 }
 
 .mainInner {
   width: 100%;
   max-width: 1320px;
   margin: 0 auto;
+  padding: 0 2px;
+}
+
+/* Tip bar full width */
+.tipFull {
+  margin: -14px -14px 12px;
 }
 
 @media (max-width: 900px) {
   .shell {
     grid-template-columns: 1fr;
+    --dock-h: 82px; /* ✅ altura aprox dock */
   }
 
   .desktopSide {
@@ -102,5 +115,13 @@
 
   .main {
     padding: 12px;
+  }
+
+  .tipFull {
+    margin: 0 -12px 12px;
+  }
+
+  .mainInner {
+    padding: 0 2px;
   }
 }

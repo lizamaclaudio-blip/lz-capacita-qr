@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { cleanRut, isValidRut, formatRutChile, normalizeRutInput } from "@/lib/rut";
@@ -53,7 +53,27 @@ function pillStatusForRut(raw: string) {
   return isValidRut(clean) ? { label: "DV OK", kind: "ok" as const } : { label: "DV inválido", kind: "bad" as const };
 }
 
-export default function NewSessionPage() {
+function NewSessionSkeleton() {
+  return (
+    <div className={styles.page}>
+      <div className={styles.headCard}>
+        <div>
+          <div className={styles.kicker}>Charlas</div>
+          <h1 className={styles.h1}>Crear charla</h1>
+          <p className={styles.sub}>Cargando…</p>
+        </div>
+      </div>
+
+      <div className={styles.grid}>
+        <div className={styles.formCard}>
+          <div style={{ padding: 18, opacity: 0.8 }}>Preparando formulario…</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NewSessionInner() {
   const router = useRouter();
   const sp = useSearchParams();
 
@@ -276,9 +296,7 @@ export default function NewSessionPage() {
 
             <div className={styles.previewRow}>
               <span className={styles.previewLabel}>Empresa</span>
-              <span className={styles.previewValue}>
-                {selectedCompany ? selectedCompany.name || "Empresa" : "—"}
-              </span>
+              <span className={styles.previewValue}>{selectedCompany ? selectedCompany.name || "Empresa" : "—"}</span>
             </div>
 
             <div className={styles.previewRow}>
@@ -296,9 +314,7 @@ export default function NewSessionPage() {
               <span className={styles.previewValue}>{sessionDate ? sessionDate.replace("T", " ") : "—"}</span>
             </div>
 
-            <div className={styles.previewHint}>
-              Al crear, abriremos el admin de la charla automáticamente.
-            </div>
+            <div className={styles.previewHint}>Al crear, abriremos el admin de la charla automáticamente.</div>
           </div>
         </aside>
 
@@ -407,9 +423,7 @@ export default function NewSessionPage() {
                   onChange={(e) => setPasscodeRut(normalizeRutInput(e.target.value))}
                   onBlur={() => setPasscodeRut(formatRutChile(passcodeRut))}
                 />
-                <div className={styles.hint}>
-                  Recomendado: deja el admin listo para cierre + PDF (se valida DV).
-                </div>
+                <div className={styles.hint}>Recomendado: deja el admin listo para cierre + PDF (se valida DV).</div>
               </div>
             </div>
 
@@ -426,5 +440,14 @@ export default function NewSessionPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function NewSessionPage() {
+  // ✅ FIX Next 16: useSearchParams debe estar dentro de Suspense en una page
+  return (
+    <Suspense fallback={<NewSessionSkeleton />}>
+      <NewSessionInner />
+    </Suspense>
   );
 }

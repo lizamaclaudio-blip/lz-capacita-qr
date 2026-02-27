@@ -2,37 +2,29 @@
 
 /* =========================================
    LZ Capacita QR – Executive (Piano Black)
-   Objetivo: seriedad, trazabilidad, "compliance".
    ========================================= */
 
 :root {
-  /* Core neutrals */
-  --ink: 12, 14, 18;         /* text */
-  --muted: 100, 116, 139;    /* secondary */
+  --ink: 12, 14, 18;
+  --muted: 100, 116, 139;
 
-  /* Piano black system (para hero/impact) */
-  --piano: 10, 11, 15;       /* #0A0B0F */
-  --piano2: 4, 6, 10;        /* deeper */
+  --piano: 10, 11, 15;
+  --piano2: 4, 6, 10;
 
-  /* One accent only (clean, executive) */
-  --accent: 56, 189, 248;    /* electric blue (no green) */
+  --accent: 56, 189, 248;
 
-  /* Chart tones (para que cada gráfico tenga un color distinto) */
   --tone-blue: 56, 189, 248;
   --tone-indigo: 99, 102, 241;
   --tone-teal: 20, 184, 166;
   --tone-amber: 245, 158, 11;
 
-  /* Background */
   --bg0: 248, 250, 252;
   --bg1: 241, 245, 249;
 
-  /* Surfaces */
   --surface: rgba(255, 255, 255, 0.78);
   --surface-2: rgba(255, 255, 255, 0.62);
   --border: rgba(12, 14, 18, 0.10);
 
-  /* Radius & shadows */
   --radius-xl: 26px;
   --radius-lg: 18px;
   --radius-md: 14px;
@@ -81,6 +73,12 @@ body {
   font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
     "Apple Color Emoji", "Segoe UI Emoji";
   background: linear-gradient(180deg, rgb(var(--bg0)) 0%, rgb(var(--bg1)) 100%);
+  -webkit-text-size-adjust: 100%;
+}
+
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Headings */
@@ -103,7 +101,7 @@ h3 {
   padding: 16px;
 }
 
-/* Buttons (menos negrita) */
+/* Buttons */
 .btn {
   border-radius: var(--radius-md);
   padding: 11px 14px;
@@ -183,10 +181,7 @@ h3 {
   box-shadow: 0 0 0 4px var(--focus);
 }
 
-/* =========================================
-   Background blobs (neutral, less colorful)
-   ========================================= */
-
+/* Background blobs */
 .blob {
   position: absolute;
   width: 980px;
@@ -241,31 +236,29 @@ h3 {
 }
 
 @keyframes float1 {
-  0%,
-  100% {
-    transform: rotate(-8deg) translate(0, 0) scale(1);
-  }
-  50% {
-    transform: rotate(-8deg) translate(80px, 30px) scale(1.04);
-  }
+  0%, 100% { transform: rotate(-8deg) translate(0, 0) scale(1); }
+  50% { transform: rotate(-8deg) translate(80px, 30px) scale(1.04); }
 }
 
 @keyframes float2 {
-  0%,
-  100% {
-    transform: rotate(10deg) translate(0, 0) scale(1);
-  }
-  50% {
-    transform: rotate(10deg) translate(-70px, -20px) scale(1.05);
-  }
+  0%, 100% { transform: rotate(10deg) translate(0, 0) scale(1); }
+  50% { transform: rotate(10deg) translate(-70px, -20px) scale(1.05); }
 }
 
 @keyframes float3 {
-  0%,
-  100% {
-    transform: rotate(6deg) translate(0, 0) scale(1);
+  0%, 100% { transform: rotate(6deg) translate(0, 0) scale(1); }
+  50% { transform: rotate(6deg) translate(30px, 34px) scale(1.04); }
+}
+
+/* ✅ Mobile ergonomics:
+   - inputs a 16px para evitar zoom iOS
+   - botones touch-friendly */
+@media (max-width: 900px) {
+  .btn {
+    min-height: 44px;
   }
-  50% {
-    transform: rotate(6deg) translate(30px, 34px) scale(1.04);
+  .input {
+    min-height: 44px;
+    font-size: 16px;
   }
 }

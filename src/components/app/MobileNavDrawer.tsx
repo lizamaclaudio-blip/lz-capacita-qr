@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { usePathname } from "next/navigation";
 import styles from "./MobileNavDrawer.module.css";
 
@@ -39,12 +39,14 @@ export default function MobileNavDrawer({ open, onClose, email, greetingName, on
     };
   }, [open, onClose]);
 
+  const isOwner = useMemo(() => (email || "").toLowerCase() === "lizamaclaudio@gmail.com", [email]);
+
   const links = [
-    { href: "/app", label: "Dashboard" },
-    { href: "/app/companies", label: "Empresas" },
-    { href: "/app/sessions", label: "Charlas" },
-    { href: "/app/pdfs", label: "PDFs" },
-    { href: "/app/profile", label: "Perfil" },
+    { href: "/app", label: "Dashboard", icon: "📊" },
+    { href: "/app/companies", label: "Empresas", icon: "🏢" },
+    { href: "/app/sessions", label: "Charlas", icon: "🎤" },
+    { href: "/app/pdfs", label: "PDFs", icon: "📄" },
+    { href: "/app/profile", label: "Perfil", icon: "👤" },
   ];
 
   return (
@@ -60,7 +62,7 @@ export default function MobileNavDrawer({ open, onClose, email, greetingName, on
 
             <div className={styles.brandText}>
               <div className={styles.title}>LZ Capacita QR</div>
-              <div className={styles.sub}>Menú</div>
+              <div className={styles.sub}>Workspace</div>
             </div>
           </div>
 
@@ -84,10 +86,26 @@ export default function MobileNavDrawer({ open, onClose, email, greetingName, on
                 className={`${styles.item} ${active ? styles.itemActive : ""}`}
                 onClick={onClose}
               >
-                {l.label}
+                <span className={styles.itemIcon} aria-hidden="true">
+                  {l.icon}
+                </span>
+                <span className={styles.itemText}>{l.label}</span>
               </Link>
             );
           })}
+
+          {isOwner ? (
+            <Link
+              href="/app/owner"
+              className={`${styles.item} ${isActive(pathname, "/app/owner") ? styles.itemActive : ""}`}
+              onClick={onClose}
+            >
+              <span className={styles.itemIcon} aria-hidden="true">
+                🛡️
+              </span>
+              <span className={styles.itemText}>Owner</span>
+            </Link>
+          ) : null}
         </nav>
 
         <div className={styles.bottom}>

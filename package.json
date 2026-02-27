@@ -10,6 +10,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@capacitor/core": "^8.1.0",
     "@supabase/supabase-js": "^2.97.0",
     "framer-motion": "^12.34.2",
     "lucide-react": "^0.575.0",
@@ -24,6 +25,8 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.1.0",
+    "@capacitor/cli": "^8.1.0",
     "@tailwindcss/postcss": "^4",
     "@types/glob": "^8.1.0",
     "@types/minimatch": "^5.1.2",

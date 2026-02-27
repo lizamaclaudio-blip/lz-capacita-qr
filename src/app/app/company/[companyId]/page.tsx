@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { formatRutChile } from "@/lib/rut";
+import StatNumber from "@/components/app/StatNumber";
 import styles from "./page.module.css";
 
 type Company = {
@@ -27,7 +28,10 @@ type WorkerRow = {
   rut: string;
   full_name: string | null;
   role: string | null;
-  last_seen_at: string;
+  last_seen_at: string | null;
+  first_seen_at: string | null;
+  attendances_total: number;
+  sessions_unique: number;
 };
 
 type SessionRow = {
@@ -44,6 +48,8 @@ type SessionRow = {
   pdf_path?: string | null;
   pdf_generated_at?: string | null;
 };
+
+type TabKey = "sessions" | "workers" | "pdfs";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -65,6 +71,10 @@ function fmtCL(iso: string | null | undefined) {
   }
 }
 
+function isSessionClosed(s: SessionRow) {
+  return (s.status ?? "").toLowerCase() === "closed" || !!s.closed_at;
+}
+
 export default function CompanyDetailPage() {
   const router = useRouter();
   const params = useParams<{ companyId: string }>();
@@ -84,10 +94,7 @@ export default function CompanyDetailPage() {
   const [workers, setWorkers] = useState<WorkerRow[]>([]);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
 
-  const [qWorkers, setQWorkers] = useState("");
-  const [qSessions, setQSessions] = useState("");
-  const [showAllWorkers, setShowAllWorkers] = useState(false);
-  const [showAllSessions, setShowAllSessions] = useState(false);
+  const [tab, setTab] = useState<TabKey>("sessions");
 
   const [token, setToken] = useState<string | null>(null);
   const tokenRef = useRef<string | null>(null);
@@ -120,6 +127,7 @@ export default function CompanyDetailPage() {
     const t = window.setTimeout(() => {
       router.replace("/app/companies");
     }, 700);
+
     return () => window.clearTimeout(t);
   }, [companyId, invalidCompanyId, router]);
 
@@ -238,39 +246,6 @@ export default function CompanyDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, token, invalidCompanyId]);
 
-  const filteredWorkers = useMemo(() => {
-    const term = qWorkers.trim().toLowerCase();
-    if (!term) return workers;
-    return workers.filter((w) => {
-      const name = (w.full_name ?? "").toLowerCase();
-      const rut = (w.rut ?? "").toLowerCase();
-      const role = (w.role ?? "").toLowerCase();
-      return name.includes(term) || rut.includes(term) || role.includes(term);
-    });
-  }, [workers, qWorkers]);
-
-  const sortedSessions = useMemo(() => {
-    const copy = [...sessions];
-    copy.sort((a, b) => {
-      const ad = new Date(a.session_date ?? a.created_at ?? 0).getTime();
-      const bd = new Date(b.session_date ?? b.created_at ?? 0).getTime();
-      return bd - ad;
-    });
-    return copy;
-  }, [sessions]);
-
-  const filteredSessions = useMemo(() => {
-    const term = qSessions.trim().toLowerCase();
-    if (!term) return sortedSessions;
-    return sortedSessions.filter((s) => {
-      const code = (s.code ?? "").toLowerCase();
-      const topic = (s.topic ?? "").toLowerCase();
-      const trainer = (s.trainer_name ?? "").toLowerCase();
-      const status = (s.status ?? "").toLowerCase();
-      return code.includes(term) || topic.includes(term) || trainer.includes(term) || status.includes(term);
-    });
-  }, [sortedSessions, qSessions]);
-
   async function copyText(text: string, msg = "Copiado ✅") {
     try {
       await navigator.clipboard.writeText(text);
@@ -300,7 +275,6 @@ export default function CompanyDetailPage() {
 
       const url = (json as any)?.signed_url;
       if (!url) throw new Error("No recibí URL firmada");
-
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (e: any) {
       setError(e?.message || "No se pudo abrir el PDF");
@@ -318,234 +292,356 @@ export default function CompanyDetailPage() {
   const companyInitial = (companyName.trim()[0] ?? "E").toUpperCase();
   const isBranch = (company?.company_type ?? "hq") === "branch";
 
-  if (invalidCompanyId) {
-    return (
-      <div className={styles.page}>
-        <div className={styles.headerCard}>
-          <div>
-            <div className={styles.kicker}>Empresa</div>
-            <div className={styles.h1}>Empresa inválida</div>
-            <div className={styles.sub}>Redirigiendo…</div>
-          </div>
-          <button type="button" className="btn btnGhost" onClick={() => router.push("/app/companies")}>
-            ← Volver
-          </button>
-        </div>
+  const sortedSessions = useMemo(() => {
+    const copy = [...sessions];
+    copy.sort((a, b) => {
+      const ad = new Date(a.session_date ?? a.created_at ?? 0).getTime();
+      const bd = new Date(b.session_date ?? b.created_at ?? 0).getTime();
+      return bd - ad;
+    });
+    return copy;
+  }, [sessions]);
 
-        {error ? <div className={styles.alertErr}>{error}</div> : null}
-      </div>
-    );
-  }
+  const sortedWorkers = useMemo(() => {
+    const copy = [...workers];
+    copy.sort((a, b) => {
+      const an = (a.full_name ?? "").toLowerCase();
+      const bn = (b.full_name ?? "").toLowerCase();
+      return an.localeCompare(bn);
+    });
+    return copy;
+  }, [workers]);
+
+  const closedSessionsCount = useMemo(() => sortedSessions.filter(isSessionClosed).length, [sortedSessions]);
+
+  const pdfItems = useMemo(() => {
+    return sortedSessions
+      .filter((s) => !!s.pdf_path)
+      .sort((a, b) => {
+        const ad = new Date(a.pdf_generated_at ?? a.closed_at ?? a.created_at ?? 0).getTime();
+        const bd = new Date(b.pdf_generated_at ?? b.closed_at ?? b.created_at ?? 0).getTime();
+        return bd - ad;
+      });
+  }, [sortedSessions]);
+
+  const createdSessionsCount = kpis?.sessions_total ?? sessions.length;
+  const workersCount = kpis?.workers_unique ?? workers.length;
+  const attendancesCount = kpis?.attendances_total ?? workers.reduce((acc, w) => acc + (Number(w.attendances_total) || 0), 0);
+  const pdfsCount = pdfItems.length;
 
   return (
     <div className={styles.page}>
-      {/* Header */}
-      <div className={styles.headerCard}>
-        <div className={styles.headerLeft}>
-          <button type="button" className="btn btnGhost" onClick={() => router.push("/app/companies")}>
-            ← Volver
-          </button>
+      <button
+        type="button"
+        className={styles.backBtn}
+        aria-label="Volver"
+        title="Volver"
+        onClick={() => router.push("/app/companies")}
+      >
+        ←
+      </button>
 
-          <div className={styles.companyRow}>
-            <div className={styles.avatar}>
-              {companyLogoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={companyLogoUrl} alt="Logo empresa" className={styles.logo} />
-              ) : (
-                <div className={styles.initial}>{companyInitial}</div>
-              )}
+      <div className={styles.headerCard}>
+        <div className={styles.companyRow}>
+          <div className={styles.avatar}>
+            {companyLogoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={companyLogoUrl} alt="Logo empresa" className={styles.logo} />
+            ) : (
+              <div className={styles.initial}>{companyInitial}</div>
+            )}
+          </div>
+
+          <div className={styles.headerInfo}>
+            <div className={styles.nameRow}>
+              <h1 className={styles.title}>{companyName}</h1>
+              <span className={`${styles.pill} ${isBranch ? styles.pillBranch : styles.pillHQ}`}>
+                {isBranch ? "📍 Sucursal" : "🏢 Casa matriz"}
+              </span>
             </div>
 
-            <div className={styles.headerInfo}>
-              <div className={styles.kicker}>Empresa</div>
-              <div className={styles.nameRow}>
-                <h1 className={styles.title}>{companyName}</h1>
-                <span className={`${styles.pill} ${isBranch ? styles.pillBranch : styles.pillHQ}`}>
-                  {isBranch ? "📍 Sucursal" : "🏢 Casa matriz"}
-                </span>
-              </div>
-              <div className={styles.metaLine}>
-                {companyLegal ? `Razón social: ${companyLegal}` : "Razón social: —"}
-              </div>
-              <div className={styles.metaLine}>
-                {companyRut ? `RUT: ${companyRut}` : "RUT: —"}
-                {companyAddress ? ` · ${companyAddress}` : ""}
-              </div>
+            <div className={styles.metaLine}>
+              {companyLegal ? `Razón social: ${companyLegal}` : "Razón social: —"}
+            </div>
+            <div className={styles.metaLine}>
+              {companyRut ? `RUT: ${companyRut}` : "RUT: —"}
+              {companyAddress ? ` · ${companyAddress}` : ""}
             </div>
           </div>
-        </div>
-
-        <div className={styles.headerRight}>
-          <button
-            type="button"
-            className="btn btnCta"
-            onClick={() => router.push(`/app/sessions/new?companyId=${encodeURIComponent(companyId)}`)}
-          >
-            ➕ Crear charla
-          </button>
-
-          <button type="button" className="btn btnPrimary" onClick={loadAll} disabled={loading}>
-            {loading ? "Cargando…" : "Actualizar"}
-          </button>
         </div>
       </div>
 
       {error ? <div className={styles.alertErr}>{error}</div> : null}
       {notice ? <div className={styles.alertOk}>{notice}</div> : null}
 
-      {/* KPIs */}
-      <div className={styles.kpiGrid}>
-        <div className={styles.kpiCard}>
-          <div className={styles.kpiLabel}>Charlas</div>
-          <div className={styles.kpiValue}>{kpis?.sessions_total ?? 0}</div>
-          <div className={styles.kpiHint}>Total creadas</div>
-        </div>
-
-        <div className={styles.kpiCard}>
-          <div className={styles.kpiLabel}>Trabajadores</div>
-          <div className={styles.kpiValue}>{kpis?.workers_unique ?? 0}</div>
-          <div className={styles.kpiHint}>Únicos con asistencia</div>
-        </div>
-
-        <div className={styles.kpiCard}>
-          <div className={styles.kpiLabel}>Asistencias</div>
-          <div className={styles.kpiValue}>{kpis?.attendances_total ?? 0}</div>
-          <div className={styles.kpiHint}>Registros totales</div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className={styles.grid}>
-        {/* Sessions */}
-        <section className={styles.panel}>
-          <div className={styles.panelHead}>
-            <div>
-              <div className={styles.panelTitle}>Charlas</div>
-              <div className={styles.panelSub}>Links QR/Firmar + cierre + PDF final</div>
-            </div>
-
-            <div className={styles.panelActions}>
-              <input
-                className={styles.searchInput}
-                value={qSessions}
-                onChange={(e) => setQSessions(e.target.value)}
-                placeholder="Buscar (tema / código / relator / estado)…"
-              />
-              <button type="button" className="btn btnGhost" onClick={() => setShowAllSessions((v) => !v)}>
-                {showAllSessions ? "Ver menos" : "Ver todas"}
-              </button>
-            </div>
+      {/* KPI tabs con números en “caja 3D” + scramble */}
+      <div className={styles.tabGrid}>
+        <button
+          type="button"
+          className={styles.tabCard}
+          data-active={tab === "sessions" ? "true" : "false"}
+          onClick={() => setTab("sessions")}
+        >
+          <div className={styles.tabTop}>
+            <div className={styles.tabLabel}>Charlas</div>
+            <div className={styles.tabHint}>Creadas vs cerradas</div>
           </div>
 
-          {loading ? (
-            <div className={styles.stateCard}>Cargando charlas…</div>
-          ) : !filteredSessions.length ? (
-            <div className={styles.stateCard}>Aún no hay charlas para esta empresa.</div>
-          ) : (
-            <div className={styles.cards}>
-              {(showAllSessions ? filteredSessions : filteredSessions.slice(0, 10)).map((s) => {
-                const code = safeUpper(s.code);
-                const isClosed = (s.status ?? "").toLowerCase() === "closed" || !!s.closed_at;
-                const when = s.session_date ?? s.created_at;
+          <div className={styles.numRow}>
+            <div className={styles.numCube}>
+              <div className={styles.numCap}>Creadas</div>
+              <div className={styles.numVal}>
+                <StatNumber value={createdSessionsCount} loading={loading} format={(n) => new Intl.NumberFormat("es-CL").format(n)} />
+              </div>
+            </div>
 
-                const publicUrl = origin ? `${origin}/c/${encodeURIComponent(code)}` : `/c/${encodeURIComponent(code)}`;
-                const adminUrl = origin
-                  ? `${origin}/admin/s/${encodeURIComponent(code)}`
-                  : `/admin/s/${encodeURIComponent(code)}`;
+            <div className={styles.numCube}>
+              <div className={styles.numCap}>Cerradas</div>
+              <div className={styles.numVal}>
+                <StatNumber value={closedSessionsCount} loading={loading} format={(n) => new Intl.NumberFormat("es-CL").format(n)} />
+              </div>
+            </div>
+          </div>
+        </button>
 
-                return (
-                  <div key={s.id} className={styles.sessionCard}>
-                    <div className={styles.sessionTop}>
-                      <div className={styles.sessionTitleRow}>
-                        <span className={`${styles.status} ${isClosed ? styles.statusClosed : styles.statusOpen}`}>
-                          {isClosed ? "🔒 Cerrada" : "🟢 Abierta"}
-                        </span>
-                        <span className={styles.sessionCode}>#{code}</span>
+        <button
+          type="button"
+          className={styles.tabCard}
+          data-active={tab === "workers" ? "true" : "false"}
+          onClick={() => setTab("workers")}
+        >
+          <div className={styles.tabTop}>
+            <div className={styles.tabLabel}>Trabajadores</div>
+            <div className={styles.tabHint}>Consolidado por asistencia</div>
+          </div>
+
+          <div className={styles.numRow}>
+            <div className={`${styles.numCube} ${styles.numCubeWide}`}>
+              <div className={styles.numCap}>Trabajadores</div>
+              <div className={styles.numVal}>
+                <StatNumber value={workersCount} loading={loading} format={(n) => new Intl.NumberFormat("es-CL").format(n)} />
+              </div>
+            </div>
+
+            <div className={`${styles.numCube} ${styles.numCubeWide}`}>
+              <div className={styles.numCap}>Registros</div>
+              <div className={styles.numVal}>
+                <StatNumber value={attendancesCount} loading={loading} format={(n) => new Intl.NumberFormat("es-CL").format(n)} />
+              </div>
+            </div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className={styles.tabCard}
+          data-active={tab === "pdfs" ? "true" : "false"}
+          onClick={() => setTab("pdfs")}
+        >
+          <div className={styles.tabTop}>
+            <div className={styles.tabLabel}>PDFs</div>
+            <div className={styles.tabHint}>Cerrados y firmados</div>
+          </div>
+
+          <div className={styles.numRow}>
+            <div className={`${styles.numCube} ${styles.numCubeSingle}`}>
+              <div className={styles.numCap}>Generados</div>
+              <div className={styles.numVal}>
+                <StatNumber value={pdfsCount} loading={loading} format={(n) => new Intl.NumberFormat("es-CL").format(n)} />
+              </div>
+            </div>
+          </div>
+        </button>
+      </div>
+
+      <section className={styles.contentPanel}>
+        {/* CHARLAS */}
+        {tab === "sessions" ? (
+          <>
+            <div className={styles.panelTop}>
+              <div>
+                <div className={styles.panelTitle}>Charlas</div>
+                <div className={styles.panelSub}>QR · Firmas · Cierre · PDF final</div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className={styles.stateCard}>Cargando charlas…</div>
+            ) : !sortedSessions.length ? (
+              <div className={styles.stateCard}>Aún no hay charlas para esta empresa.</div>
+            ) : (
+              <div className={styles.cards}>
+                {sortedSessions.map((s) => {
+                  const code = safeUpper(s.code);
+                  const isClosed = isSessionClosed(s);
+                  const when = s.session_date ?? s.created_at;
+
+                  const publicUrl = origin ? `${origin}/c/${encodeURIComponent(code)}` : `/c/${encodeURIComponent(code)}`;
+                  const adminUrl = origin
+                    ? `${origin}/admin/s/${encodeURIComponent(code)}`
+                    : `/admin/s/${encodeURIComponent(code)}`;
+
+                  return (
+                    <div key={s.id} className={styles.sessionCard}>
+                      <div className={styles.sessionTop}>
+                        <div className={styles.sessionTitleRow}>
+                          <span className={`${styles.status} ${isClosed ? styles.statusClosed : styles.statusOpen}`}>
+                            {isClosed ? "🔒 Cerrada" : "🟢 Abierta"}
+                          </span>
+                          <span className={styles.sessionCode}>#{code}</span>
+                        </div>
+
+                        <div className={styles.sessionTopic}>{s.topic ?? "(Sin tema)"}</div>
+
+                        <div className={styles.sessionMeta}>
+                          {s.location || "—"} · {fmtCL(when)}
+                        </div>
+                        <div className={styles.sessionMeta}>Relator: {s.trainer_name ?? "—"}</div>
                       </div>
 
-                      <div className={styles.sessionTopic}>{s.topic ?? "(Sin tema)"}</div>
+                      {/* ✅ Cerrada => SOLO PDF */}
+                      <div className={styles.sessionActions}>
+                        {isClosed ? (
+                          s.pdf_path ? (
+                            <button className={styles.actionPdfPill} type="button" onClick={() => openPdf(String(s.pdf_path))}>
+                              🧾 PDF
+                            </button>
+                          ) : (
+                            <span className={styles.actionPdfPillDisabled}>🧾 PDF pendiente</span>
+                          )
+                        ) : (
+                          <>
+                            <button className={styles.actionBtn} type="button" onClick={() => copyText(publicUrl, "Link QR copiado ✅")}>
+                              📎 QR
+                            </button>
 
-                      <div className={styles.sessionMeta}>
-                        {s.location || "—"} · {fmtCL(when)}
+                            <button className={styles.actionBtn} type="button" onClick={() => copyText(adminUrl, "Link Firmar copiado ✅")}>
+                              📎 Firmar
+                            </button>
+
+                            <button className={styles.actionBtn} type="button" onClick={() => openQr(code)}>
+                              ↗ Abrir QR
+                            </button>
+
+                            {s.pdf_path ? (
+                              <button className={styles.actionPdfPill} type="button" onClick={() => openPdf(String(s.pdf_path))}>
+                                🧾 PDF
+                              </button>
+                            ) : null}
+
+                            <button className={styles.actionBtnPrimary} type="button" onClick={() => openAdmin(code)}>
+                              Abrir admin →
+                            </button>
+                          </>
+                        )}
                       </div>
-                      <div className={styles.sessionMeta}>Relator: {s.trainer_name ?? "—"}</div>
-                    </div>
 
-                    <div className={styles.sessionActions}>
-                      <button className={styles.smallBtn} type="button" onClick={() => copyText(publicUrl, "Link QR copiado ✅")}>
-                        📎 QR
-                      </button>
-                      <button className={styles.smallBtn} type="button" onClick={() => copyText(adminUrl, "Link Firmar copiado ✅")}>
-                        📎 Firmar
-                      </button>
-
-                      <button className={styles.smallBtn} type="button" onClick={() => openQr(code)}>
-                        ↗ Abrir QR
-                      </button>
-
-                      {s.pdf_path ? (
-                        <button className={styles.smallBtnCta} type="button" onClick={() => openPdf(String(s.pdf_path))}>
-                          🧾 PDF
-                        </button>
+                      {!isClosed ? (
+                        <div className={styles.sessionHint}>
+                          Tip: el PDF se genera en el admin con <b>passcode (RUT relator)</b>.
+                        </div>
                       ) : null}
-
-                      <button className={styles.smallBtnPrimary} type="button" onClick={() => openAdmin(code)}>
-                        Abrir admin →
-                      </button>
                     </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        ) : null}
 
-                    <div className={styles.sessionHint}>
-                      Tip: el PDF se genera en el admin con <b>passcode (RUT relator)</b>.
+        {/* TRABAJADORES */}
+        {tab === "workers" ? (
+          <>
+            <div className={styles.panelTop}>
+              <div>
+                <div className={styles.panelTitle}>Trabajadores</div>
+                <div className={styles.panelSub}>Consolidado desde registros de asistencia</div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className={styles.stateCard}>Cargando trabajadores…</div>
+            ) : !sortedWorkers.length ? (
+              <div className={styles.stateCard}>Aún no hay registros de trabajadores para esta empresa.</div>
+            ) : (
+              <div className={styles.workerList}>
+                {sortedWorkers.map((w) => {
+                  const rut = w.rut ? formatRutChile(w.rut) : "—";
+                  const name = w.full_name ?? "(Sin nombre)";
+                  const role = w.role ?? "—";
+                  const sessionsUnique = Number(w.sessions_unique) || 0;
+                  const attendsTotal = Number(w.attendances_total) || 0;
+
+                  return (
+                    <button key={w.rut} type="button" className={styles.workerRow} onClick={() => goWorker(w.rut)}>
+                      <div className={styles.workerMain}>
+                        <div className={styles.workerName}>{name}</div>
+                        <div className={styles.workerMeta}>
+                          {rut} · {role}
+                        </div>
+                      </div>
+
+                      <div className={styles.workerRight}>
+                        <span className={styles.workerStat}>{sessionsUnique} charlas</span>
+                        <span className={styles.workerDot}>•</span>
+                        <span className={styles.workerStat}>{attendsTotal} registros</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        ) : null}
+
+        {/* PDFS */}
+        {tab === "pdfs" ? (
+          <>
+            <div className={styles.panelTop}>
+              <div>
+                <div className={styles.panelTitle}>PDFs</div>
+                <div className={styles.panelSub}>Cierres finalizados con firma del relator</div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className={styles.stateCard}>Cargando PDFs…</div>
+            ) : !pdfItems.length ? (
+              <div className={styles.stateCard}>Aún no hay PDFs generados para esta empresa.</div>
+            ) : (
+              <div className={styles.pdfList}>
+                {pdfItems.map((s) => {
+                  const code = safeUpper(s.code);
+                  const when = s.pdf_generated_at ?? s.closed_at ?? s.created_at;
+                  const title = s.topic ?? "(Sin tema)";
+                  const trainer = s.trainer_name ?? "—";
+
+                  return (
+                    <div key={s.id} className={styles.pdfRow}>
+                      <div className={styles.pdfMain}>
+                        <div className={styles.pdfTitle}>
+                          {title} <span className={styles.pdfCode}>#{code}</span>
+                        </div>
+                        <div className={styles.pdfMeta}>
+                          Relator: {trainer} · {fmtCL(when)}
+                        </div>
+                      </div>
+
+                      <div className={styles.pdfActions}>
+                        {s.pdf_path ? (
+                          <button type="button" className={styles.actionPdfPill} onClick={() => openPdf(String(s.pdf_path))}>
+                            🧾 Abrir PDF
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* Workers */}
-        <section className={styles.panel}>
-          <div className={styles.panelHead}>
-            <div>
-              <div className={styles.panelTitle}>Trabajadores</div>
-              <div className={styles.panelSub}>Se generan automáticamente desde asistencias</div>
-            </div>
-
-            <div className={styles.panelActions}>
-              <input
-                className={styles.searchInput}
-                value={qWorkers}
-                onChange={(e) => setQWorkers(e.target.value)}
-                placeholder="Buscar (nombre / RUT / cargo)…"
-              />
-              <button type="button" className="btn btnGhost" onClick={() => setShowAllWorkers((v) => !v)}>
-                {showAllWorkers ? "Ver menos" : "Ver todos"}
-              </button>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className={styles.stateCard}>Cargando trabajadores…</div>
-          ) : !filteredWorkers.length ? (
-            <div className={styles.stateCard}>Aún no hay trabajadores registrados para esta empresa.</div>
-          ) : (
-            <div className={styles.workerList}>
-              {(showAllWorkers ? filteredWorkers : filteredWorkers.slice(0, 12)).map((w) => (
-                <button key={w.rut} type="button" className={styles.workerRow} onClick={() => goWorker(w.rut)}>
-                  <div className={styles.workerMain}>
-                    <div className={styles.workerName}>{w.full_name ?? "(Sin nombre)"}</div>
-                    <div className={styles.workerMeta}>
-                      {formatRutChile(w.rut)} · {w.role ?? "—"}
-                    </div>
-                  </div>
-                  <div className={styles.workerRight}>→</div>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        ) : null}
+      </section>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import EditCompanyModal, { Company } from "@/components/app/EditCompanyModal";
@@ -54,8 +54,70 @@ function companyLogoPublicUrl(logo_path?: string | null) {
   return `${base}/storage/v1/object/public/company-logos/${clean}`;
 }
 
+function timeOf(iso?: string | null) {
+  if (!iso) return 0;
+  const t = Date.parse(iso);
+  return Number.isFinite(t) ? t : 0;
+}
+
+function BuildingIcon() {
+  return (
+    <svg
+      className={styles.buildingIcon}
+      viewBox="0 0 64 64"
+      role="img"
+      aria-label="Empresas"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id="b1" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="rgba(99,102,241,0.95)" />
+          <stop offset="1" stopColor="rgba(20,184,166,0.85)" />
+        </linearGradient>
+        <linearGradient id="b2" x1="1" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="rgba(245,158,11,0.95)" />
+          <stop offset="1" stopColor="rgba(99,102,241,0.55)" />
+        </linearGradient>
+      </defs>
+      <rect x="8" y="6" width="48" height="52" rx="16" fill="rgba(255,255,255,0.10)" />
+      <path
+        d="M20 52V22c0-2 1.2-3.8 3-4.6l12-5.3c1.3-.6 2.7-.6 4 0l3 1.3c1.8.8 3 2.6 3 4.6v34"
+        fill="url(#b1)"
+        opacity="0.95"
+      />
+      <path d="M14 52V28c0-1.7 1-3.2 2.5-3.9l3.5-1.6V52" fill="url(#b2)" opacity="0.95" />
+      <path d="M44 52V24l4 1.8c1.5.7 2.5 2.2 2.5 3.9v22" fill="rgba(255,255,255,0.18)" />
+      <g opacity="0.9">
+        {[
+          [26, 22],
+          [34, 22],
+          [26, 30],
+          [34, 30],
+          [26, 38],
+          [34, 38],
+        ].map(([x, y], i) => (
+          <rect key={i} x={x} y={y} width="5" height="5" rx="1.5" fill="rgba(255,255,255,0.75)" />
+        ))}
+      </g>
+      <rect x="30" y="46" width="8" height="6" rx="2" fill="rgba(6,15,35,0.55)" />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className={styles.searchIcon} aria-hidden="true">
+      <path
+        d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Zm0-2a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11Zm7.9 4.5-4.2-4.2 1.4-1.4 4.2 4.2-1.4 1.4Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 export default function CompaniesPage() {
   const router = useRouter();
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -110,7 +172,6 @@ export default function CompaniesPage() {
       if ((s as any).pdf_path) map[cid].pdfs += 1;
     }
 
-    // pdfs endpoint returns only with pdf_path, but we still count by company.
     for (const p of pdfs) {
       const cid = String((p as any).company_id || "");
       if (!cid) continue;
@@ -121,40 +182,50 @@ export default function CompaniesPage() {
     return map;
   }, [sessions, pdfs]);
 
+  const ordered = useMemo(() => {
+    const copy = [...companies];
+    copy.sort((a, b) => timeOf(b.created_at) - timeOf(a.created_at));
+    return copy;
+  }, [companies]);
+
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
-    if (!qq) return companies;
+    if (!qq) return ordered;
 
-    return companies.filter((c) => {
+    return ordered.filter((c) => {
       const name = (c.name || "").toLowerCase();
       const rut = (c.rut || "").toLowerCase();
       return name.includes(qq) || rut.includes(qq);
     });
-  }, [companies, q]);
+  }, [ordered, q]);
 
   function openEdit(c: Company) {
     setEditing(c);
     setEditOpen(true);
   }
 
+  function openCompany(companyId: string) {
+    router.push(`/app/company/${companyId}`);
+  }
+
+  function activateSearch() {
+    searchRef.current?.focus();
+  }
+
   return (
     <div className={styles.page}>
       <div className={styles.head}>
-        <div>
-          <div className={styles.kicker}>Empresas</div>
-          <h1 className={styles.h1}>Mis Empresas</h1>
-          <p className={styles.sub}>Tarjetas compactas (logo · nombre · RUT).</p>
+        <div className={styles.titleWrap}>
+          <BuildingIcon />
+          <div className={styles.titleText}>
+            <h1 className={styles.h1}>Mis Empresas</h1>
+            <p className={styles.sub}>Gestiona tus empresas.</p>
+          </div>
         </div>
 
         <div className={styles.headActions}>
-          <Link href="/app" className="btn btnGhost">
-            ← Dashboard
-          </Link>
           <Link href="/app/companies/new" className="btn btnPrimary">
             + Nueva empresa
-          </Link>
-          <Link href="/app/sessions/new" className="btn btnCta">
-            + Nueva charla
           </Link>
         </div>
       </div>
@@ -163,13 +234,23 @@ export default function CompaniesPage() {
 
       <div className={styles.toolbar}>
         <input
+          ref={searchRef}
           className="input"
           placeholder="Buscar por nombre o RUT…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setQ("");
+          }}
         />
-        <button type="button" className={styles.refreshBtn} onClick={reloadAll} disabled={loading}>
-          {loading ? "…" : "Actualizar"}
+        <button
+          type="button"
+          className={styles.searchBtn}
+          onClick={activateSearch}
+          title="Buscar"
+          aria-label="Buscar"
+        >
+          <SearchIcon />
         </button>
       </div>
 
@@ -179,30 +260,56 @@ export default function CompaniesPage() {
         ) : filtered.length === 0 ? (
           <div className={styles.empty}>No hay empresas. Crea la primera ✅</div>
         ) : (
-          <div className={styles.grid}>
+          <div className={styles.list}>
             {filtered.map((c) => {
               const logo = companyLogoPublicUrl((c as any).logo_path);
               const st = statsByCompany[c.id] || { sessions: 0, attendees: 0, pdfs: 0 };
 
               return (
-                <div key={c.id} className={styles.card}>
-                  <div className={styles.cardTop}>
-                    <div className={styles.logoBox} aria-hidden="true">
-                      {logo ? <img className={styles.logoImg} src={logo} alt="" /> : <div className={styles.logoFallback}>LZ</div>}
-                    </div>
-
-                    <div className={styles.cardMeta}>
-                      <div className={styles.title}>{c.name || "Empresa"}</div>
-                      <div className={styles.subMeta}>{c.rut ? `RUT: ${c.rut}` : "RUT: —"}</div>
-                    </div>
-
-                    <div className={styles.cardActions}><Link href={`/app/company/${c.id}`} className={styles.openBtn}>Abrir</Link><button type="button" className={styles.editBtn} onClick={() => openEdit(c)}>Editar</button></div>
+                <div
+                  key={c.id}
+                  className={styles.row}
+                  role="link"
+                  tabIndex={0}
+                  aria-label={`Abrir ${c.name || "empresa"}`}
+                  onClick={() => openCompany(c.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openCompany(c.id);
+                    }
+                  }}
+                >
+                  <div className={styles.logoBox} aria-hidden="true">
+                    {logo ? (
+                      <img className={styles.logoImg} src={logo} alt="" />
+                    ) : (
+                      <div className={styles.logoFallback}>LZ</div>
+                    )}
                   </div>
 
-                  <div className={styles.pills}>
-                    <span className={styles.pill}>{fmtInt(st.sessions)} charlas</span>
-                    <span className={styles.pill}>{fmtInt(st.attendees)} asistentes</span>
-                    <span className={styles.pill}>{fmtInt(st.pdfs)} PDFs</span>
+                  <div className={styles.main}>
+                    <div className={styles.line}>
+                      <div className={styles.title} title={c.name || ""}>
+                        {c.name || "Empresa"}
+                      </div>
+
+                      <div className={styles.rut} title={c.rut || ""}>
+                        {c.rut ? `RUT: ${c.rut}` : "RUT: —"}
+                      </div>
+
+                      <div className={styles.pills}>
+                        <span className={styles.pill}>{fmtInt(st.sessions)} charlas</span>
+                        <span className={styles.pill}>{fmtInt(st.attendees)} asistentes</span>
+                        <span className={styles.pill}>{fmtInt(st.pdfs)} PDFs</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={styles.actions} onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className={styles.editBtn} onClick={() => openEdit(c)}>
+                      Editar
+                    </button>
                   </div>
                 </div>
               );
