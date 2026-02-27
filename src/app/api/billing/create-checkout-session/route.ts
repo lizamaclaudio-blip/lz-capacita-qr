@@ -5,20 +5,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 import { mpCreatePreapproval } from "@/lib/mercadopago";
-import type { PublicTier } from "@/lib/billing/mpPlans";
+import { planIdForTier, type PublicTier } from "@/lib/billing/mpPlans";
 
 const BodySchema = z.object({
   tier: z.enum(["bronce", "plata", "oro"]),
   success_url: z.string().optional(),
+  cancel_url: z.string().optional(),
 });
-
-function amountForTier(tier: PublicTier) {
-  // 💡 Estos montos deben coincidir con tus planes de Mercado Pago (los que ya creaste)
-  // Bronce: 2990, Plata: 7990, Oro: 12990
-  if (tier === "oro") return 12990;
-  if (tier === "plata") return 7990;
-  return 2990;
-}
 
 function getToken(req: NextRequest) {
   const auth = req.headers.get("authorization") || "";
@@ -49,10 +42,17 @@ export async function POST(req: NextRequest) {
 
     const user = data.user;
     const tier = parsed.data.tier as PublicTier;
-    const amount = amountForTier(tier);
+    const planId = planIdForTier(tier);
+    if (!planId) {
+      return NextResponse.json(
+        { error: `Falta configurar MP_PREAPPROVAL_PLAN_ID para plan ${tier}` },
+        { status: 500 }
+      );
+    }
 
     const appUrl = (process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").trim() || req.nextUrl.origin;
     const successUrl = parsed.data.success_url || `${appUrl}/app/billing?status=success`;
+    const cancelUrl = parsed.data.cancel_url || `${appUrl}/app/billing?status=cancel`;
 
     if (!user.email) {
       return NextResponse.json(
@@ -64,21 +64,13 @@ export async function POST(req: NextRequest) {
     const webhookUrl = `${appUrl}/api/billing/webhook?source_news=webhooks`;
 
     const preapproval = await mpCreatePreapproval({
+      preapproval_plan_id: planId,
       payer_email: user.email,
       reason: `LZ Capacita QR - Plan ${tier.toUpperCase()}`,
       external_reference: user.id,
       back_url: successUrl,
       notification_url: webhookUrl,
       status: "pending",
-      // ✅ Suscripción SIN plan asociado (evita card_token_id)
-      // El usuario completa el flujo en Mercado Pago (init_point)
-      auto_recurring: {
-        frequency: 1,
-        frequency_type: "months",
-        transaction_amount: amount,
-        currency_id: "CLP",
-        start_date: new Date().toISOString(),
-      },
     });
 
     const url = preapproval.init_point || preapproval.sandbox_init_point;
@@ -96,7 +88,7 @@ export async function POST(req: NextRequest) {
         ...md,
         subscription_provider: "mercadopago",
         mp_preapproval_id: preapproval.id || md.mp_preapproval_id || null,
-        mp_preapproval_plan_id: null,
+        mp_preapproval_plan_id: planId,
         pending_plan_tier: tier,
       },
     });
