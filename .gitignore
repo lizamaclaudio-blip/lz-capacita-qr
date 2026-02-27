@@ -1,56 +1,48 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
-
-# testing
-/coverage
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-
-# debug
+# =========================
+# Node / Next.js
+# =========================
+node_modules/
+.next/
+out/
+dist/
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
+pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# Env files
+.env
+.env.*
+!.env.example
 
-# vercel
-.vercel
+# =========================
+# OS / IDE
+# =========================
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/
+*.swp
 
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-# electron build outputs
-dist/
-electron/dist/
-electron/out/
-*.exe
-*.msi
-*.dmg
-*.AppImage
-# electron build outputs
-dist/
-electron/dist/
-electron/out/
-*.exe
-*.msi
-*.asar
+# =========================
+# Archives / misc
+# =========================
+*.zip
+*.7z
+*.rar
+
+# =========================
+# Capacitor / Android (NO ignores el código android, solo builds)
+# =========================
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+
+# =========================
+# iOS (si algún día agregas)
+# =========================
+ios/Pods/
+ios/build/

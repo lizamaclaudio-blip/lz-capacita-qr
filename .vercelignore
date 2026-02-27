@@ -1,0 +1,18 @@
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Archives
+*.zip
+
+# Mobile build artifacts (Capacitor)
+android/.gradle/
+android/app/build/
+android/build/
+
+# Node/Next build
+node_modules/
+.next/
+out/
