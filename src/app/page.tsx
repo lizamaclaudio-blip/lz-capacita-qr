@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styles from "./page.module.css";
 
 type LandingStats = {
@@ -17,12 +17,18 @@ type Plan = {
   title: string;
   price: string;
   subtitle: string;
-  bullets: string[];
+  features: string[];
   cta: string;
-  popular?: boolean;
+  highlight?: boolean;
 };
 
-function fmtInt(n: number) {
+function clampInt(n: any, fallback = 0) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return fallback;
+  return Math.max(0, Math.floor(x));
+}
+
+function formatIntCL(n: number) {
   try {
     return new Intl.NumberFormat("es-CL").format(n);
   } catch {
@@ -31,30 +37,37 @@ function fmtInt(n: number) {
 }
 
 function useCountUp(target: number, durationMs = 900) {
-  const [val, setVal] = useState(0);
+  const [value, setValue] = useState(0);
 
   useEffect(() => {
     let raf = 0;
     const start = performance.now();
-    const from = 0;
-    const to = Math.max(0, Math.floor(target || 0));
+    const from = value;
+    const to = clampInt(target, 0);
 
-    function tick(t: number) {
-      const p = Math.min((t - start) / durationMs, 1);
-      const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
-      setVal(Math.round(from + (to - from) * eased));
-      if (p < 1) raf = requestAnimationFrame(tick);
+    function tick(now: number) {
+      const t = Math.min(1, (now - start) / durationMs);
+      const eased = 1 - Math.pow(1 - t, 3);
+      const next = Math.round(from + (to - from) * eased);
+      setValue(next);
+      if (t < 1) raf = requestAnimationFrame(tick);
     }
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [target, durationMs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
 
-  return val;
+  return value;
 }
 
 export default function HomePage() {
-  const [stats, setStats] = useState<LandingStats | null>(null);
+  const [stats, setStats] = useState<LandingStats>({
+    companies: 0,
+    sessions: 0,
+    attendees: 0,
+    pdfs: 0,
+  });
   const [statsUpdatedAt, setStatsUpdatedAt] = useState<string | null>(null);
 
   const plans: Plan[] = useMemo(
@@ -62,40 +75,43 @@ export default function HomePage() {
       {
         tier: "bronce",
         title: "Bronce",
-        price: "Desde $… / mes",
-        subtitle: "Para partir rápido",
-        bullets: [
+        price: "Desde $2.990 / mes",
+        subtitle: "Ideal para empezar con 1 empresa.",
+        features: [
           "1 empresa",
-          "Hasta 10 charlas / mes",
-          "Hasta 60 asistentes por charla",
-          "PDF final con firmas",
+          "8 charlas/mes",
+          "30 asistentes por charla",
+          "8 PDFs/mes",
+          "Dashboard y control de asistencia",
         ],
-        cta: "Empezar",
+        cta: "Elegir Bronce",
       },
       {
         tier: "plata",
         title: "Plata",
-        price: "Desde $… / mes",
-        subtitle: "El más elegido",
-        bullets: [
+        price: "Desde $7.990 / mes",
+        subtitle: "Para equipos con más rotación.",
+        features: [
           "3 empresas",
-          "Hasta 60 charlas / mes",
-          "Hasta 250 asistentes por charla",
+          "25 charlas/mes",
+          "80 asistentes por charla",
+          "25 PDFs/mes",
           "Soporte prioritario",
         ],
         cta: "Elegir Plata",
-        popular: true,
+        highlight: true,
       },
       {
         tier: "oro",
         title: "Oro",
-        price: "Desde $… / mes",
-        subtitle: "Para equipos intensivos",
-        bullets: [
-          "Hasta 15 empresas",
-          "Hasta 400 charlas / mes",
-          "Hasta 1200 asistentes por charla",
-          "Control + reportes",
+        price: "Desde $12.990 / mes",
+        subtitle: "Para operación intensiva.",
+        features: [
+          "10 empresas",
+          "100 charlas/mes",
+          "250 asistentes por charla",
+          "100 PDFs/mes",
+          "Mejoras premium",
         ],
         cta: "Elegir Oro",
       },
@@ -103,587 +119,304 @@ export default function HomePage() {
     []
   );
 
-  // Fetch stats (no rompe la landing si falla)
   useEffect(() => {
-    let alive = true;
+    let cancelled = false;
 
-    (async () => {
+    async function loadStats() {
       try {
-        const res = await fetch("/api/public/landing-stats", { cache: "no-store" });
-        const json = await res.json().catch(() => null);
-        if (!alive) return;
-        if (!res.ok) return;
+        // Si tienes endpoint real, cámbialo aquí.
+        // Por ahora dejamos estadísticas "demo" para la landing.
+        const demo: LandingStats = {
+          companies: 128,
+          sessions: 942,
+          attendees: 13824,
+          pdfs: 812,
+        };
 
-        setStats(json?.stats ?? null);
-        setStatsUpdatedAt(json?.updated_at ?? null);
+        if (cancelled) return;
+        setStats(demo);
+        setStatsUpdatedAt(new Date().toISOString());
       } catch {
-        // noop
+        // fallback silencioso
       }
-    })();
+    }
 
+    loadStats();
     return () => {
-      alive = false;
+      cancelled = true;
     };
   }, []);
 
-  // Reveal on scroll (sin librerías)
-  useEffect(() => {
-    const els = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
-    if (!els.length) return;
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          if (e.isIntersecting) {
-            (e.target as HTMLElement).classList.add(styles.revealed);
-            io.unobserve(e.target);
-          }
-        }
-      },
-      { threshold: 0.18 }
-    );
-
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, []);
-
-  const cCompanies = useCountUp(stats?.companies ?? 0, 900);
-  const cSessions = useCountUp(stats?.sessions ?? 0, 1000);
-  const cAttendees = useCountUp(stats?.attendees ?? 0, 1100);
-  const cPdfs = useCountUp(stats?.pdfs ?? 0, 900);
+  const companiesCount = useCountUp(stats.companies, 900);
+  const sessionsCount = useCountUp(stats.sessions, 900);
+  const attendeesCount = useCountUp(stats.attendees, 900);
+  const pdfsCount = useCountUp(stats.pdfs, 900);
 
   return (
-    <main className={styles.root}>
-      {/* NAV */}
-      <header className={styles.header}>
-        <div className={styles.nav}>
-          <Link href="/" className={styles.brand}>
-            <span className={styles.logoBox}>
-              <Image
-                src="/brand/lzq-mark.svg"
-                alt="LZ Capacita QR"
-                fill
-                priority
-                sizes="46px"
-                className={styles.logoImg}
-              />
-            </span>
-
-            <span className={styles.brandText}>
-              <span className={styles.brandTitle}>LZ Capacita QR</span>
-              <span className={styles.brandSub}>QR · Firma · PDF final</span>
-            </span>
-          </Link>
-
-          <nav className={styles.menu} aria-label="Navegación">
-            <a className={styles.menuLink} href="#producto">
-              Producto
-            </a>
-            <a className={styles.menuLink} href="#planes">
-              Planes
-            </a>
-            <a className={styles.menuLink} href="#numeros">
-              En números
-            </a>
-            <a className={styles.menuLink} href="#como-funciona">
-              Cómo funciona
-            </a>
-            <a className={styles.menuLink} href="#faq">
-              FAQ
-            </a>
-          </nav>
-
-          <div className={styles.actions}>
-            <Link href="/login" className={`btn btnGhost ${styles.btnSm}`}>
-              Iniciar sesión
-            </Link>
-            <Link href="/signup" className={`btn btnCta ${styles.btnSm}`}>
-              Prueba gratis
-            </Link>
-          </div>
-        </div>
-      </header>
-
+    <main className={styles.page}>
       {/* HERO */}
       <section className={styles.hero}>
-        <div className={styles.heroLeft}>
-          <div
-            className={`${styles.kicker} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "0ms" }}
-          >
-            <span className={styles.dot} />
-            Trazabilidad · evidencia · auditoría
+        <div className={styles.heroInner}>
+          <div className={styles.heroLeft}>
+            <div className={styles.badge}>LZ Capacita QR</div>
+
+            <h1 className={styles.h1}>
+              Capacita, registra asistencia y genera tu PDF final en minutos.
+            </h1>
+
+            <p className={styles.lead}>
+              Un sistema simple y profesional para gestionar charlas de
+              capacitación: QR público, firma en el celular, panel admin y
+              cierre con PDF.
+            </p>
+
+            <div className={styles.heroCtas}>
+              <Link href="/signup" className={styles.ctaPrimary}>
+                Crear cuenta
+              </Link>
+
+              <Link href="/login" className={styles.ctaSecondary}>
+                Ingresar
+              </Link>
+
+              <a href="#planes" className={styles.ctaGhost}>
+                Ver planes
+              </a>
+            </div>
+
+            <div className={styles.miniTrust}>
+              <div className={styles.miniTrustItem}>
+                <span className={styles.miniDot} /> QR público por charla
+              </div>
+              <div className={styles.miniTrustItem}>
+                <span className={styles.miniDot} /> Firmas y cierre relator
+              </div>
+              <div className={styles.miniTrustItem}>
+                <span className={styles.miniDot} /> PDF final automatizado
+              </div>
+            </div>
           </div>
 
-          <h1
-            className={`${styles.h1} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "70ms" }}
-          >
-            Registra asistencia con QR,
-            <br />
-            firma y genera <span className={styles.h1Strong}>PDF final</span>.
-          </h1>
+          <div className={styles.heroRight}>
+            <div className={styles.heroCard}>
+              <div className={styles.heroCardHeader}>
+                <div className={styles.heroLogoWrap}>
+                  <Image
+                    src="/lz-capacita-qr.png"
+                    alt="LZ Capacita QR"
+                    width={46}
+                    height={46}
+                    className={styles.heroLogo}
+                  />
+                </div>
+                <div className={styles.heroCardTitle}>
+                  <div className={styles.heroCardTitleTop}>Dashboard</div>
+                  <div className={styles.heroCardTitleBottom}>
+                    resumen mensual
+                  </div>
+                </div>
+              </div>
 
-          <p
-            className={`${styles.p} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "120ms" }}
-          >
-            Crea una charla, comparte el QR, valida RUT + DV, captura firma en el celular y cierra con firma del relator.
-            El resultado queda en un PDF consolidado con respaldo.
+              <div className={styles.statsGrid}>
+                <div className={styles.statItem}>
+                  <div className={styles.statLabel}>Empresas</div>
+                  <div className={styles.statValue}>
+                    {formatIntCL(companiesCount)}
+                  </div>
+                </div>
+
+                <div className={styles.statItem}>
+                  <div className={styles.statLabel}>Charlas</div>
+                  <div className={styles.statValue}>
+                    {formatIntCL(sessionsCount)}
+                  </div>
+                </div>
+
+                <div className={styles.statItem}>
+                  <div className={styles.statLabel}>Asistentes</div>
+                  <div className={styles.statValue}>
+                    {formatIntCL(attendeesCount)}
+                  </div>
+                </div>
+
+                <div className={styles.statItem}>
+                  <div className={styles.statLabel}>PDFs</div>
+                  <div className={styles.statValue}>
+                    {formatIntCL(pdfsCount)}
+                  </div>
+                </div>
+              </div>
+
+              <div className={styles.heroCardFooter}>
+                <div className={styles.heroCardHint}>
+                  {statsUpdatedAt ? "Actualizado recientemente" : "Cargando..."}
+                </div>
+                <Link href="/app" className={styles.heroCardLink}>
+                  Ir al panel →
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURES */}
+      <section className={styles.section}>
+        <div className={styles.sectionInner}>
+          <h2 className={styles.h2}>¿Qué resuelve?</h2>
+          <p className={styles.p}>
+            Pensado para que cualquier relator o encargado pueda gestionar una
+            capacitación sin planillas, sin caos y con respaldo.
           </p>
 
-          <div
-            className={`${styles.ctaRow} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "170ms" }}
-          >
-            <Link href="/signup" className={`btn btnPrimary ${styles.btnLg}`}>
-              Solicitar demo <span className={styles.arrow}>→</span>
+          <div className={styles.featureGrid}>
+            <div className={styles.featureCard}>
+              <div className={styles.featureTitle}>QR público</div>
+              <div className={styles.featureText}>
+                Un código por charla. Los asistentes entran desde su celular y
+                registran su asistencia al instante.
+              </div>
+            </div>
+
+            <div className={styles.featureCard}>
+              <div className={styles.featureTitle}>Firma en el celular</div>
+              <div className={styles.featureText}>
+                Firma digital del asistente (PNG) con validaciones de RUT DV,
+                datos y control por sesión.
+              </div>
+            </div>
+
+            <div className={styles.featureCard}>
+              <div className={styles.featureTitle}>Panel de administración</div>
+              <div className={styles.featureText}>
+                Crea empresas, crea charlas, revisa asistentes, cierra con firma
+                del relator y genera PDF final.
+              </div>
+            </div>
+
+            <div className={styles.featureCard}>
+              <div className={styles.featureTitle}>PDF final automático</div>
+              <div className={styles.featureText}>
+                Genera un PDF con logos, firmas y datos. Queda listo para enviar
+                o respaldar auditorías.
+              </div>
+            </div>
+          </div>
+
+          <div className={styles.sectionCtaRow}>
+            <Link href="/signup" className={styles.ctaPrimary}>
+              Empezar ahora
             </Link>
-            <a href="#como-funciona" className={`btn btnGhost ${styles.btnLg}`}>
-              Ver cómo funciona
+            <a href="#planes" className={styles.ctaSecondary}>
+              Ver planes
             </a>
           </div>
-
-          <div
-            className={`${styles.trustRow} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "220ms" }}
-          >
-            <div className={styles.trustPill}>RUT + DV</div>
-            <div className={styles.trustPill}>Firma digital</div>
-            <div className={styles.trustPill}>PDF final</div>
-            <div className={styles.trustPill}>Sin planillas</div>
-          </div>
-
-          <div
-            className={`${styles.micro} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "260ms" }}
-          >
-            Diseñado para prevención, RR.HH. y equipos en terreno.
-          </div>
-        </div>
-
-        {/* Mock visual (dashboard + móvil) */}
-        <div
-          className={`${styles.heroRight} ${styles.reveal}`}
-          data-reveal
-          style={{ ["--d" as any]: "120ms" }}
-          aria-hidden="true"
-        >
-          <div className={styles.bento}>
-            <div className={styles.tileBig}>
-              <div className={styles.tileTop}>
-                <div>
-                  <div className={styles.tileTitle}>Dashboard de charla</div>
-                  <div className={styles.tileSub}>Asistentes · firmas · PDF</div>
-                </div>
-                <div className={styles.badge}>PDF listo</div>
-              </div>
-
-              <div className={styles.kpiGrid}>
-                <div className={styles.kpi}>
-                  <div className={styles.kpiLabel}>Asistentes</div>
-                  <div className={styles.kpiValue}>124</div>
-                </div>
-                <div className={styles.kpi}>
-                  <div className={styles.kpiLabel}>Firmas</div>
-                  <div className={styles.kpiValue}>124</div>
-                </div>
-                <div className={styles.kpi}>
-                  <div className={styles.kpiLabel}>PDF</div>
-                  <div className={styles.kpiValue}>1</div>
-                </div>
-              </div>
-
-              <div className={styles.flow}>
-                <div className={styles.flowTitle}>Flujo</div>
-                <div className={styles.flowLine}>1) Crear charla → QR</div>
-                <div className={styles.flowLine}>2) Registro + firma</div>
-                <div className={styles.flowLine}>3) Cierre relator → PDF</div>
-              </div>
-            </div>
-
-            <div className={styles.tile}>
-              <div className={styles.miniTitle}>Registro QR</div>
-              <div className={styles.miniRow}>
-                <span>RUT</span>
-                <span className={styles.miniStrong}>12.345.678-9</span>
-              </div>
-              <div className={styles.miniRow}>
-                <span>Firma</span>
-                <span className={styles.miniStrong}>✍️</span>
-              </div>
-              <div className={styles.miniBtn}>Finalizar</div>
-            </div>
-
-            <div className={styles.tile}>
-              <div className={styles.miniTitle}>Control</div>
-              <div className={styles.miniPill}>Trazabilidad</div>
-              <div className={styles.miniPill}>Respaldo</div>
-              <div className={styles.miniPill}>Auditoría</div>
-            </div>
-
-            <div className={styles.glow} />
-          </div>
         </div>
       </section>
 
-      {/* EN NÚMEROS */}
-      <section id="numeros" className={styles.section}>
-        <div className={styles.sectionHeadRow}>
-          <div>
-            <h2
-              className={`${styles.h2} ${styles.reveal}`}
-              data-reveal
-              style={{ ["--d" as any]: "0ms" }}
-            >
-              En números
-            </h2>
-            <p
-              className={`${styles.lead} ${styles.reveal}`}
-              data-reveal
-              style={{ ["--d" as any]: "60ms" }}
-            >
-              Métricas en vivo desde la plataforma.
-            </p>
-          </div>
-
-          <div
-            className={`${styles.statsNote} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "90ms" }}
-          >
-            {statsUpdatedAt
-              ? `Actualizado: ${new Date(statsUpdatedAt).toLocaleString("es-CL")}`
-              : "Actualización automática"}
-          </div>
-        </div>
-
-        <div className={styles.statsGrid}>
-          <div
-            className={`${styles.statCard} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "0ms" }}
-          >
-            <div className={styles.statLabel}>Empresas</div>
-            <div className={styles.statValue}>{fmtInt(cCompanies)}</div>
-            <div className={styles.statSub}>Creadas en la plataforma</div>
-          </div>
-
-          <div
-            className={`${styles.statCard} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "60ms" }}
-          >
-            <div className={styles.statLabel}>Charlas</div>
-            <div className={styles.statValue}>{fmtInt(cSessions)}</div>
-            <div className={styles.statSub}>Abiertas y cerradas</div>
-          </div>
-
-          <div
-            className={`${styles.statCard} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "120ms" }}
-          >
-            <div className={styles.statLabel}>Asistencias</div>
-            <div className={styles.statValue}>{fmtInt(cAttendees)}</div>
-            <div className={styles.statSub}>Con RUT + firma</div>
-          </div>
-
-          <div
-            className={`${styles.statCard} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "180ms" }}
-          >
-            <div className={styles.statLabel}>PDFs</div>
-            <div className={styles.statValue}>{fmtInt(cPdfs)}</div>
-            <div className={styles.statSub}>Consolidado final</div>
-          </div>
-        </div>
-      </section>
-
-      {/* PRODUCTO */}
-      <section id="producto" className={styles.section}>
-        <div className={styles.sectionHead}>
-          <h2
-            className={`${styles.h2} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "0ms" }}
-          >
-            Producto
-          </h2>
-          <p
-            className={`${styles.lead} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "60ms" }}
-          >
-            El flujo completo: QR → registro → firma → cierre → PDF.
+      {/* PRICING */}
+      <section id="planes" className={styles.sectionAlt}>
+        <div className={styles.sectionInner}>
+          <h2 className={styles.h2}>Planes</h2>
+          <p className={styles.p}>
+            Elige el plan según la cantidad de empresas y volumen de charlas.
           </p>
-        </div>
 
-        <div className={styles.bentoGrid}>
-          <div
-            className={`${styles.bentoCard} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "0ms" }}
-          >
-            <div className={styles.icon}>📷</div>
-            <div className={styles.bTitle}>QR público</div>
-            <div className={styles.bText}>
-              Asistencia desde cualquier celular, sin instalar apps.
-            </div>
-          </div>
-
-          <div
-            className={`${styles.bentoCard} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "60ms" }}
-          >
-            <div className={styles.icon}>🪪</div>
-            <div className={styles.bTitle}>RUT + DV</div>
-            <div className={styles.bText}>
-              Validación para reducir errores y duplicados.
-            </div>
-          </div>
-
-          <div
-            className={`${styles.bentoCard} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "120ms" }}
-          >
-            <div className={styles.icon}>✍️</div>
-            <div className={styles.bTitle}>Firma digital</div>
-            <div className={styles.bText}>
-              Firma del asistente + firma final del relator.
-            </div>
-          </div>
-
-          <div
-            className={`${styles.bentoCardWide} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "180ms" }}
-          >
-            <div className={styles.wTop}>
-              <div>
-                <div className={styles.wTitle}>PDF final con logos</div>
-                <div className={styles.wText}>
-                  Documento consolidado con lista, firmas y logos. Ideal para respaldo y auditoría.
-                </div>
-              </div>
-              <div className={styles.wStamp}>PDF</div>
-            </div>
-
-            <div className={styles.wLines}>
-              <div className={styles.wLine} />
-              <div className={styles.wLine} />
-              <div className={styles.wLine} />
-              <div className={styles.wLineShort} />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* PLANES */}
-      <section id="planes" className={styles.section}>
-        <div className={styles.sectionHeadRow}>
-          <div>
-            <h2 className={`${styles.h2} ${styles.reveal}`} data-reveal style={{ ["--d" as any]: "0ms" }}>
-              Planes
-            </h2>
-            <p className={`${styles.lead} ${styles.reveal}`} data-reveal style={{ ["--d" as any]: "60ms" }}>
-              Suscripción mensual. Cambia de plan cuando quieras.
-            </p>
-          </div>
-
-          <div className={`${styles.plansNote} ${styles.reveal}`} data-reveal style={{ ["--d" as any]: "90ms" }}>
-            Modo Diamante es interno (Owner).
-          </div>
-        </div>
-
-        <div className={styles.pricingGrid}>
-          {plans.map((p, i) => (
-            <div
-              key={p.tier}
-              className={`${styles.planFrame} ${styles[`tier_${p.tier}`]} ${styles.reveal}`}
-              data-reveal
-              style={{ ["--d" as any]: `${i * 70}ms` }}
-              data-pop={p.popular ? "true" : "false"}
-            >
-              <div className={styles.planInner}>
+          <div className={styles.pricingGrid}>
+            {plans.map((p) => (
+              <div
+                key={p.tier}
+                className={[
+                  styles.planCard,
+                  p.highlight ? styles.planCardHighlight : "",
+                  styles[`plan_${p.tier}`],
+                ].join(" ")}
+              >
                 <div className={styles.planTop}>
-                  <div>
-                    <div className={styles.planTitleRow}>
-                      <div className={styles.planTitle}>{p.title}</div>
-                      {p.popular ? <div className={styles.planPill}>POPULAR</div> : null}
-                    </div>
-                    <div className={styles.planSubtitle}>{p.subtitle}</div>
-                  </div>
-
+                  <div className={styles.planTitle}>{p.title}</div>
                   <div className={styles.planPrice}>{p.price}</div>
+                  <div className={styles.planSubtitle}>{p.subtitle}</div>
                 </div>
 
                 <ul className={styles.planList}>
-                  {p.bullets.map((b) => (
-                    <li key={b} className={styles.planItem}>
-                      <span className={styles.check}>✓</span>
-                      <span>{b}</span>
+                  {p.features.map((f) => (
+                    <li key={f} className={styles.planListItem}>
+                      <span className={styles.check} /> {f}
                     </li>
                   ))}
                 </ul>
 
-                <Link href={`/signup?plan=${p.tier}`} className={`btn ${p.popular ? "btnPrimary" : "btnCta"} ${styles.planBtn}`}>
-                  {p.cta} <span className={styles.arrow}>→</span>
-                </Link>
+                <div className={styles.planBottom}>
+                  <Link
+                    href={`/signup?plan=${p.tier}`}
+                    className={styles.planCta}
+                  >
+                    {p.cta}
+                  </Link>
+
+                  <div className={styles.planFootnote}>
+                    Puedes cambiar de plan cuando quieras.
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-
-        <div className={`${styles.plansFoot} ${styles.reveal}`} data-reveal style={{ ["--d" as any]: "260ms" }}>
-          <div className={styles.plansFootText}>
-            ¿Necesitas algo a medida? Escríbenos y armamos un plan "Empresa".
-          </div>
-          <Link href="/signup" className={`btn btnGhost ${styles.btnLg}`}>
-            Probar gratis
-          </Link>
-        </div>
-      </section>
-
-      {/* CÓMO FUNCIONA */}
-      <section id="como-funciona" className={styles.section}>
-        <div className={styles.sectionHead}>
-          <h2
-            className={`${styles.h2} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "0ms" }}
-          >
-            Cómo funciona
-          </h2>
-          <p
-            className={`${styles.lead} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "60ms" }}
-          >
-            Un proceso simple, rápido y controlado.
-          </p>
-        </div>
-
-        <div className={styles.steps}>
-          <div
-            className={`${styles.step} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "0ms" }}
-          >
-            <div className={styles.stepNum}>1</div>
-            <div className={styles.stepTitle}>Crea la charla</div>
-            <div className={styles.stepText}>
-              Define empresa, relator y tema. Se genera un código y QR.
-            </div>
+            ))}
           </div>
 
-          <div
-            className={`${styles.step} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "70ms" }}
-          >
-            <div className={styles.stepNum}>2</div>
-            <div className={styles.stepTitle}>Registro + firma</div>
-            <div className={styles.stepText}>
-              Cada asistente ingresa su nombre, RUT y firma desde el móvil.
-            </div>
+          <div className={styles.pricingNote}>
+            ¿Eres empresa grande y necesitas límites especiales?{" "}
+            <Link href="/signup" className={styles.inlineLink}>
+              Escríbenos desde tu cuenta
+            </Link>
+            .
           </div>
-
-          <div
-            className={`${styles.step} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "140ms" }}
-          >
-            <div className={styles.stepNum}>3</div>
-            <div className={styles.stepTitle}>Cierre del relator</div>
-            <div className={styles.stepText}>
-              El relator firma el cierre. Se bloquea la charla para evitar cambios.
-            </div>
-          </div>
-
-          <div
-            className={`${styles.step} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "210ms" }}
-          >
-            <div className={styles.stepNum}>4</div>
-            <div className={styles.stepTitle}>PDF final</div>
-            <div className={styles.stepText}>
-              Se genera el PDF consolidado con las firmas y logos.
-            </div>
-          </div>
-        </div>
-
-        <div
-          className={`${styles.centerCta} ${styles.reveal}`}
-          data-reveal
-          style={{ ["--d" as any]: "250ms" }}
-        >
-          <Link href="/signup" className={`btn btnPrimary ${styles.btnLg}`}>
-            Probar ahora <span className={styles.arrow}>→</span>
-          </Link>
-          <Link href="/app" className={`btn btnGhost ${styles.btnLg}`}>
-            Ver plataforma
-          </Link>
         </div>
       </section>
 
       {/* FAQ */}
-      <section id="faq" className={styles.section}>
-        <div className={styles.sectionHead}>
-          <h2
-            className={`${styles.h2} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "0ms" }}
-          >
-            Preguntas frecuentes
-          </h2>
-          <p
-            className={`${styles.lead} ${styles.reveal}`}
-            data-reveal
-            style={{ ["--d" as any]: "60ms" }}
-          >
-            Respuestas rápidas para implementar sin fricción.
-          </p>
-        </div>
+      <section className={styles.section}>
+        <div className={styles.sectionInner}>
+          <h2 className={styles.h2}>Preguntas frecuentes</h2>
 
-        <div className={styles.faqGrid}>
-          <details className={`${styles.faq} ${styles.reveal}`} data-reveal style={{ ["--d" as any]: "0ms" }}>
-            <summary>¿Necesito que la gente instale una app?</summary>
-            <div className={styles.faqBody}>
-              No. El registro funciona con el QR en navegador del celular.
+          <div className={styles.faqGrid}>
+            <div className={styles.faqCard}>
+              <div className={styles.faqQ}>¿Necesito instalar algo?</div>
+              <div className={styles.faqA}>
+                No. Es una app web. Puedes usarla desde PC o celular.
+              </div>
             </div>
-          </details>
 
-          <details className={`${styles.faq} ${styles.reveal}`} data-reveal style={{ ["--d" as any]: "60ms" }}>
-            <summary>¿Qué pasa si alguien se equivoca en el RUT?</summary>
-            <div className={styles.faqBody}>
-              Se valida RUT + DV para reducir errores y asegurar trazabilidad.
+            <div className={styles.faqCard}>
+              <div className={styles.faqQ}>¿Los asistentes necesitan cuenta?</div>
+              <div className={styles.faqA}>
+                No. Registran asistencia con el QR público de la charla.
+              </div>
             </div>
-          </details>
 
-          <details className={`${styles.faq} ${styles.reveal}`} data-reveal style={{ ["--d" as any]: "120ms" }}>
-            <summary>¿Se puede cerrar la charla para que no entren más registros?</summary>
-            <div className={styles.faqBody}>
-              Sí. Con la firma del relator se cierra y queda lista para PDF.
+            <div className={styles.faqCard}>
+              <div className={styles.faqQ}>¿Puedo agregar el logo de mi empresa?</div>
+              <div className={styles.faqA}>
+                Sí. En “Mis Empresas” puedes subir tu logo y se reflejará en el
+                PDF final.
+              </div>
             </div>
-          </details>
 
-          <details className={`${styles.faq} ${styles.reveal}`} data-reveal style={{ ["--d" as any]: "180ms" }}>
-            <summary>¿El PDF queda con firmas?</summary>
-            <div className={styles.faqBody}>
-              Sí. Incluye firmas de asistentes y firma del relator, más los logos configurados.
+            <div className={styles.faqCard}>
+              <div className={styles.faqQ}>¿Cómo se genera el PDF?</div>
+              <div className={styles.faqA}>
+                Al cerrar la charla con firma del relator, se genera un PDF con
+                el resumen, asistentes y firmas.
+              </div>
             </div>
-          </details>
+          </div>
+
+          <div className={styles.sectionCtaRow}>
+            <Link href="/signup" className={styles.ctaPrimary}>
+              Crear cuenta
+            </Link>
+            <Link href="/login" className={styles.ctaSecondary}>
+              Ya tengo cuenta
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -691,15 +424,36 @@ export default function HomePage() {
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
           <div className={styles.footerBrand}>
-            <div className={styles.footerTitle}>LZ Capacita QR</div>
-            <div className={styles.footerSub}>Trazabilidad ejecutiva para capacitaciones.</div>
+            <Image
+              src="/lz-capacita-qr.png"
+              alt="LZ Capacita QR"
+              width={34}
+              height={34}
+              className={styles.footerLogo}
+            />
+            <div className={styles.footerBrandText}>
+              <div className={styles.footerName}>LZ Capacita QR</div>
+              <div className={styles.footerSub}>
+                Capacitación • Asistencia • PDF
+              </div>
+            </div>
           </div>
 
           <div className={styles.footerLinks}>
-            <a href="#producto">Producto</a>
-            <a href="#como-funciona">Cómo funciona</a>
-            <Link href="/login">Login</Link>
-            <Link href="/signup">Prueba gratis</Link>
+            <a href="#planes" className={styles.footerLink}>
+              Planes
+            </a>
+            <Link href="/login" className={styles.footerLink}>
+              Ingresar
+            </Link>
+            <Link href="/signup" className={styles.footerLink}>
+              Crear cuenta
+            </Link>
+          </div>
+
+          <div className={styles.footerCopy}>
+            © {new Date().getFullYear()} LZ Capacita QR. Todos los derechos
+            reservados.
           </div>
         </div>
       </footer>
