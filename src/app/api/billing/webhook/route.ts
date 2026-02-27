@@ -7,6 +7,14 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { mpGetPreapproval, type MpPreapproval } from "@/lib/mercadopago";
 import { tierFromPlanId } from "@/lib/billing/mpPlans";
 
+function tierFromReason(reason: string): "bronce" | "plata" | "oro" | null {
+  const r = String(reason || "").toLowerCase();
+  if (r.includes("oro")) return "oro";
+  if (r.includes("plata")) return "plata";
+  if (r.includes("bronce")) return "bronce";
+  return null;
+}
+
 async function updateUserMetadata(userId: string, patch: Record<string, any>) {
   const sb = supabaseAdmin();
   const { data } = await sb.auth.admin.getUserById(userId);
@@ -96,6 +104,7 @@ export async function POST(req: NextRequest) {
 
     const tier =
       tierFromPlanId(String(preapproval.preapproval_plan_id || "")) ||
+      tierFromReason(String((preapproval as any).reason || "")) ||
       (String((preapproval as any)?.metadata?.plan_tier || "").trim() as any) ||
       null;
 

@@ -55,11 +55,20 @@ export type MpPreapproval = {
   payer_email?: string;
   preapproval_plan_id?: string;
   external_reference?: string;
+  reason?: string;
   init_point?: string;
   sandbox_init_point?: string;
   next_payment_date?: string;
   date_created?: string;
   last_modified?: string;
+  auto_recurring?: {
+    frequency?: number;
+    frequency_type?: string;
+    transaction_amount?: number;
+    currency_id?: string;
+    start_date?: string;
+    end_date?: string;
+  };
 };
 
 export async function mpGetPreapproval(id: string) {
