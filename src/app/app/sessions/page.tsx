@@ -21,6 +21,8 @@ type Session = {
   companies?: { id?: string; name?: string | null; rut?: string | null; logo_path?: string | null } | null;
 };
 
+const MOBILE_BP = 900;
+
 function fmtInt(n: number) {
   try {
     return new Intl.NumberFormat("es-CL").format(n);
@@ -65,7 +67,13 @@ function SearchIcon() {
 
 function SessionsIcon() {
   return (
-    <svg className={styles.sessionsIcon} viewBox="0 0 64 64" role="img" aria-label="Charlas" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      className={styles.sessionsIcon}
+      viewBox="0 0 64 64"
+      role="img"
+      aria-label="Charlas"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <defs>
         <linearGradient id="s1" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="rgba(99,102,241,0.95)" />
@@ -82,10 +90,28 @@ function SessionsIcon() {
         fill="url(#s1)"
         opacity="0.95"
       />
-      <path d="M22 24h20" stroke="rgba(255,255,255,0.78)" strokeWidth="3" strokeLinecap="round" opacity="0.9" />
-      <path d="M22 32h14" stroke="rgba(255,255,255,0.70)" strokeWidth="3" strokeLinecap="round" opacity="0.85" />
+      <path
+        d="M22 24h20"
+        stroke="rgba(255,255,255,0.78)"
+        strokeWidth="3"
+        strokeLinecap="round"
+        opacity="0.9"
+      />
+      <path
+        d="M22 32h14"
+        stroke="rgba(255,255,255,0.70)"
+        strokeWidth="3"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
       <circle cx="46" cy="44" r="9" fill="url(#s2)" opacity="0.92" />
-      <path d="M46 40v4l3 2" stroke="rgba(6,15,35,0.85)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M46 40v4l3 2"
+        stroke="rgba(6,15,35,0.85)"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
@@ -118,7 +144,22 @@ export default function SessionsPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [q, setQ] = useState("");
 
-  // ===== Split PDF viewer state =====
+  // ===== responsive mode =====
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${MOBILE_BP}px)`);
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    if ("addEventListener" in mq) mq.addEventListener("change", apply);
+    else (mq as any).addListener(apply);
+    return () => {
+      if ("removeEventListener" in mq) mq.removeEventListener("change", apply);
+      else (mq as any).removeListener(apply);
+    };
+  }, []);
+
+  // ===== PDF viewer state =====
+  const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfSession, setPdfSession] = useState<Session | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -149,6 +190,7 @@ export default function SessionsPage() {
     };
   }, [router]);
 
+  // ESC para cerrar visor
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") closePdf();
@@ -156,7 +198,17 @@ export default function SessionsPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdfSession, pdfUrl]);
+  }, [pdfOpen, pdfUrl, pdfSession]);
+
+  // Bloquear scroll del body SOLO cuando el visor full-screen (mobile) está abierto
+  useEffect(() => {
+    if (!(isMobile && pdfOpen)) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isMobile, pdfOpen]);
 
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
@@ -184,6 +236,7 @@ export default function SessionsPage() {
   }
 
   function closePdf() {
+    setPdfOpen(false);
     setPdfSession(null);
     setPdfLoading(false);
     setPdfError(null);
@@ -195,8 +248,10 @@ export default function SessionsPage() {
     if (!path) return;
 
     setPdfSession(s);
+    setPdfOpen(true);
     setPdfError(null);
 
+    // cache hit
     if (pdfCache[path]) {
       setPdfUrl(pdfCache[path]);
       return;
@@ -234,7 +289,13 @@ export default function SessionsPage() {
     }
   }
 
-  const splitOpen = !!pdfSession;
+  const showSplit = pdfOpen && !isMobile; // desktop
+  const showModal = pdfOpen && isMobile;  // mobile full-screen
+
+  const titleForPdf = useMemo(() => {
+    if (!pdfSession) return "PDF";
+    return `${pdfSession.topic || "Charla"} • ${pdfSession.companies?.name || "Empresa"} • ${pdfSession.code}`;
+  }, [pdfSession]);
 
   return (
     <div className={styles.page}>
@@ -267,223 +328,261 @@ export default function SessionsPage() {
             if (e.key === "Escape") setQ("");
           }}
         />
-
         <button type="button" className={styles.searchBtn} onClick={activateSearch} title="Buscar" aria-label="Buscar">
           <SearchIcon />
         </button>
       </div>
 
-      {/* ✅ ÚNICO scroll de la página */}
-      <div className={styles.pageScroller}>
-        <div className={`${styles.split} ${splitOpen ? styles.splitOpen : ""}`}>
-          {/* LEFT */}
-          <div className={styles.left}>
-            {loading ? (
-              <div className={styles.skel}>Cargando…</div>
-            ) : sessions.length === 0 ? (
-              <div className={styles.empty}>No hay charlas aún. Crea la primera ✅</div>
-            ) : filtered.length === 0 ? (
-              <div className={styles.empty}>No hay resultados. Prueba con otra búsqueda.</div>
-            ) : (
-              <div className={styles.list}>
-                <div className={styles.sectionHead}>
-                  <div className={styles.sectionTitle}>Abiertas</div>
-                  <div className={styles.sectionCount}>{fmtInt(openList.length)}</div>
+      {/* ✅ Scroll igual que Mis Empresas: NO hay scroller interno, usa el del layout */}
+      <div className={`${styles.split} ${showSplit ? styles.splitOpen : ""}`}>
+        {/* LEFT: List */}
+        <div className={styles.left}>
+          {loading ? (
+            <div className={styles.skel}>Cargando…</div>
+          ) : sessions.length === 0 ? (
+            <div className={styles.empty}>No hay charlas aún. Crea la primera ✅</div>
+          ) : filtered.length === 0 ? (
+            <div className={styles.empty}>No hay resultados. Prueba con otra búsqueda.</div>
+          ) : (
+            <div className={styles.list}>
+              {/* Abiertas */}
+              <div className={styles.sectionHead}>
+                <div className={styles.sectionTitle}>Abiertas</div>
+                <div className={styles.sectionCount}>{fmtInt(openList.length)}</div>
+              </div>
+
+              {openList.length === 0 ? (
+                <div className={styles.sectionEmpty}>No hay charlas abiertas.</div>
+              ) : (
+                <div className={styles.sectionList}>
+                  {openList.map((s) => {
+                    const attendees = Number(s.attendees_count) || 0;
+                    const companyName = s.companies?.name || "—";
+                    const logo = companyLogoPublicUrl(s.companies?.logo_path);
+
+                    return (
+                      <div
+                        key={s.id}
+                        className={styles.row}
+                        role="link"
+                        tabIndex={0}
+                        aria-label={`Abrir admin de ${s.topic || "charla"}`}
+                        onClick={() => openAdmin(s)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openAdmin(s);
+                          }
+                        }}
+                      >
+                        <div className={styles.logoBox} aria-hidden="true">
+                          {logo ? <img className={styles.logoImg} src={logo} alt="" /> : <div className={styles.logoFallback}>LZ</div>}
+                        </div>
+
+                        <div className={styles.main}>
+                          <div className={styles.line}>
+                            <div className={styles.title} title={s.topic || ""}>
+                              {s.topic || "Charla"}
+                            </div>
+
+                            <div className={styles.company} title={companyName}>
+                              {companyName}
+                            </div>
+
+                            <div className={styles.code} title={`Código ${s.code}`}>
+                              Código: {s.code}
+                            </div>
+
+                            <div className={styles.pills}>
+                              <span className={styles.pill}>{fmtInt(attendees)} asistentes</span>
+                              <span className={styles.pill}>{fmtDateShort(s.session_date || s.created_at)}</span>
+                              <span className={`${styles.pill} ${styles.pillOpen}`}>Abierta</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className={styles.actions} onClick={(e) => e.stopPropagation()}>
+                          <a className="btn btnGhost" href={`/c/${s.code}`} target="_blank" rel="noreferrer">
+                            Abrir
+                          </a>
+                          <a className="btn btnPrimary" href={`/admin/s/${s.code}`} target="_blank" rel="noreferrer">
+                            Firmar
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
+              )}
 
-                {openList.length === 0 ? (
-                  <div className={styles.sectionEmpty}>No hay charlas abiertas.</div>
-                ) : (
-                  <div className={styles.sectionList}>
-                    {openList.map((s) => {
-                      const attendees = Number(s.attendees_count) || 0;
-                      const companyName = s.companies?.name || "—";
-                      const logo = companyLogoPublicUrl(s.companies?.logo_path);
+              {/* Cerradas */}
+              <div className={styles.sectionHead}>
+                <div className={styles.sectionTitle}>Cerradas</div>
+                <div className={styles.sectionCount}>{fmtInt(closedList.length)}</div>
+              </div>
 
-                      return (
-                        <div
-                          key={s.id}
-                          className={styles.row}
-                          role="link"
-                          tabIndex={0}
-                          aria-label={`Abrir admin de ${s.topic || "charla"}`}
-                          onClick={() => openAdmin(s)}
-                          onKeyDown={(e) => {
+              {closedList.length === 0 ? (
+                <div className={styles.sectionEmpty}>No hay charlas cerradas.</div>
+              ) : (
+                <div className={styles.sectionList}>
+                  {closedList.map((s) => {
+                    const attendees = Number(s.attendees_count) || 0;
+                    const companyName = s.companies?.name || "—";
+                    const logo = companyLogoPublicUrl(s.companies?.logo_path);
+                    const hasPdf = !!s.pdf_path;
+                    const selected = pdfSession?.id === s.id && pdfOpen;
+
+                    const rowProps = hasPdf
+                      ? {
+                          role: "button" as const,
+                          tabIndex: 0,
+                          onClick: () => openPdfForSession(s),
+                          onKeyDown: (e: React.KeyboardEvent) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
-                              openAdmin(s);
+                              openPdfForSession(s);
                             }
-                          }}
-                        >
-                          <div className={styles.logoBox} aria-hidden="true">
-                            {logo ? <img className={styles.logoImg} src={logo} alt="" /> : <div className={styles.logoFallback}>LZ</div>}
-                          </div>
+                          },
+                        }
+                      : { role: "group" as const };
 
-                          <div className={styles.main}>
-                            <div className={styles.line}>
-                              <div className={styles.title} title={s.topic || ""}>
-                                {s.topic || "Charla"}
-                              </div>
+                    return (
+                      <div
+                        key={s.id}
+                        className={`${styles.row} ${hasPdf ? "" : styles.rowStatic} ${selected ? styles.rowSelected : ""}`}
+                        aria-label={`${s.topic || "Charla"} (cerrada)`}
+                        {...rowProps}
+                      >
+                        <div className={styles.logoBox} aria-hidden="true">
+                          {logo ? <img className={styles.logoImg} src={logo} alt="" /> : <div className={styles.logoFallback}>LZ</div>}
+                        </div>
 
-                              <div className={styles.company} title={companyName}>
-                                {companyName}
-                              </div>
+                        <div className={styles.main}>
+                          <div className={styles.line}>
+                            <div className={styles.title} title={s.topic || ""}>
+                              {s.topic || "Charla"}
+                            </div>
 
-                              <div className={styles.code} title={`Código ${s.code}`}>
-                                Código: {s.code}
-                              </div>
+                            <div className={styles.company} title={companyName}>
+                              {companyName}
+                            </div>
 
-                              <div className={styles.pills}>
-                                <span className={styles.pill}>{fmtInt(attendees)} asistentes</span>
-                                <span className={styles.pill}>{fmtDateShort(s.session_date || s.created_at)}</span>
-                                <span className={`${styles.pill} ${styles.pillOpen}`}>Abierta</span>
-                              </div>
+                            <div className={styles.code} title={`Código ${s.code}`}>
+                              Código: {s.code}
+                            </div>
+
+                            <div className={styles.pills}>
+                              <span className={styles.pill}>{fmtInt(attendees)} asistentes</span>
+                              <span className={styles.pill}>{fmtDateShort(s.session_date || s.created_at)}</span>
+                              <span className={`${styles.pill} ${styles.pillClosed}`}>Cerrada</span>
                             </div>
                           </div>
-
-                          <div className={styles.actions} onClick={(e) => e.stopPropagation()}>
-                            <a className="btn btnGhost" href={`/c/${s.code}`} target="_blank" rel="noreferrer">
-                              Abrir
-                            </a>
-                            <a className="btn btnPrimary" href={`/admin/s/${s.code}`} target="_blank" rel="noreferrer">
-                              Firmar
-                            </a>
-                          </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
 
-                <div className={styles.sectionHead}>
-                  <div className={styles.sectionTitle}>Cerradas</div>
-                  <div className={styles.sectionCount}>{fmtInt(closedList.length)}</div>
-                </div>
-
-                {closedList.length === 0 ? (
-                  <div className={styles.sectionEmpty}>No hay charlas cerradas.</div>
-                ) : (
-                  <div className={styles.sectionList}>
-                    {closedList.map((s) => {
-                      const attendees = Number(s.attendees_count) || 0;
-                      const companyName = s.companies?.name || "—";
-                      const logo = companyLogoPublicUrl(s.companies?.logo_path);
-                      const hasPdf = !!s.pdf_path;
-                      const selected = pdfSession?.id === s.id;
-
-                      const rowProps = hasPdf
-                        ? {
-                            role: "button" as const,
-                            tabIndex: 0,
-                            onClick: () => openPdfForSession(s),
-                            onKeyDown: (e: React.KeyboardEvent) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                openPdfForSession(s);
-                              }
-                            },
-                          }
-                        : { role: "group" as const };
-
-                      return (
-                        <div
-                          key={s.id}
-                          className={`${styles.row} ${hasPdf ? "" : styles.rowStatic} ${selected ? styles.rowSelected : ""}`}
-                          aria-label={`${s.topic || "Charla"} (cerrada)`}
-                          {...rowProps}
-                        >
-                          <div className={styles.logoBox} aria-hidden="true">
-                            {logo ? <img className={styles.logoImg} src={logo} alt="" /> : <div className={styles.logoFallback}>LZ</div>}
-                          </div>
-
-                          <div className={styles.main}>
-                            <div className={styles.line}>
-                              <div className={styles.title} title={s.topic || ""}>
-                                {s.topic || "Charla"}
-                              </div>
-
-                              <div className={styles.company} title={companyName}>
-                                {companyName}
-                              </div>
-
-                              <div className={styles.code} title={`Código ${s.code}`}>
-                                Código: {s.code}
-                              </div>
-
-                              <div className={styles.pills}>
-                                <span className={styles.pill}>{fmtInt(attendees)} asistentes</span>
-                                <span className={styles.pill}>{fmtDateShort(s.session_date || s.created_at)}</span>
-                                <span className={`${styles.pill} ${styles.pillClosed}`}>Cerrada</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className={styles.actions} onClick={(e) => e.stopPropagation()}>
-                            {hasPdf ? (
-                              <button type="button" className="btn btnCta" onClick={() => openPdfForSession(s)}>
-                                PDF
-                              </button>
-                            ) : (
-                              <span className={styles.pdfPending}>PDF pendiente</span>
-                            )}
-                          </div>
+                        <div className={styles.actions} onClick={(e) => e.stopPropagation()}>
+                          {hasPdf ? (
+                            <button type="button" className="btn btnCta" onClick={() => openPdfForSession(s)}>
+                              PDF
+                            </button>
+                          ) : (
+                            <span className={styles.pdfPending}>PDF pendiente</span>
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* RIGHT: Split Viewer */}
-          {splitOpen ? (
-            <aside className={styles.viewer} aria-label="Visor PDF">
-              <div className={styles.viewerCard}>
-                <div className={styles.viewerHead}>
-                  <div className={styles.viewerHeadLeft}>
-                    <div className={styles.viewerKicker}>Visor PDF</div>
-                    <div
-                      className={styles.viewerTitle}
-                      title={`${pdfSession?.topic || "Charla"} • ${pdfSession?.companies?.name || "Empresa"} • ${pdfSession?.code || ""}`}
-                    >
-                      {pdfSession?.topic || "Charla"} • {pdfSession?.companies?.name || "Empresa"} • {pdfSession?.code || ""}
-                    </div>
-                  </div>
-
-                  <div className={styles.viewerBtns}>
-                    {pdfUrl ? (
-                      <a className="btn btnGhost" href={pdfUrl} target="_blank" rel="noreferrer">
-                        Abrir en pestaña
-                      </a>
-                    ) : (
-                      <button className="btn btnGhost" type="button" disabled>
-                        Abrir en pestaña
-                      </button>
-                    )}
-
-                    <button className="btn btnPrimary" type="button" onClick={closePdf}>
-                      Cerrar
-                    </button>
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
-
-                <div className={styles.viewerBody}>
-                  {pdfLoading ? (
-                    <div className={styles.viewerState}>Cargando PDF…</div>
-                  ) : pdfError ? (
-                    <div className={styles.viewerStateErr}>{pdfError}</div>
-                  ) : pdfUrl ? (
-                    <iframe className={styles.viewerFrame} src={pdfUrl} title="PDF" />
-                  ) : (
-                    <div className={styles.viewerState}>Preparando…</div>
-                  )}
-                </div>
-              </div>
-            </aside>
-          ) : null}
+              )}
+            </div>
+          )}
         </div>
+
+        {/* RIGHT: Split viewer (solo desktop) */}
+        {showSplit ? (
+          <aside className={styles.viewer} aria-label="Visor PDF">
+            <div className={styles.viewerCard}>
+              <div className={styles.viewerHead}>
+                <div className={styles.viewerHeadLeft}>
+                  <div className={styles.viewerKicker}>Visor PDF</div>
+                  <div className={styles.viewerTitle} title={titleForPdf}>
+                    {titleForPdf}
+                  </div>
+                </div>
+
+                <div className={styles.viewerBtns}>
+                  {pdfUrl ? (
+                    <a className="btn btnGhost" href={pdfUrl} target="_blank" rel="noreferrer">
+                      Abrir en pestaña
+                    </a>
+                  ) : (
+                    <button className="btn btnGhost" type="button" disabled>
+                      Abrir en pestaña
+                    </button>
+                  )}
+                  <button className="btn btnPrimary" type="button" onClick={closePdf}>
+                    Cerrar
+                  </button>
+                </div>
+              </div>
+
+              <div className={styles.viewerBody}>
+                {pdfLoading ? (
+                  <div className={styles.viewerState}>Cargando PDF…</div>
+                ) : pdfError ? (
+                  <div className={styles.viewerStateErr}>{pdfError}</div>
+                ) : pdfUrl ? (
+                  <iframe className={styles.viewerFrame} src={pdfUrl} title="PDF" />
+                ) : (
+                  <div className={styles.viewerState}>Preparando…</div>
+                )}
+              </div>
+            </div>
+          </aside>
+        ) : null}
       </div>
+
+      {/* FULL-SCREEN viewer (solo mobile) */}
+      {showModal ? (
+        <div className={styles.pdfBackdrop} role="dialog" aria-modal="true" aria-label="Visor PDF móvil">
+          <div className={styles.pdfModal}>
+            <div className={styles.pdfHead}>
+              <div className={styles.pdfHeadLeft}>
+                <div className={styles.pdfKicker}>PDF</div>
+                <div className={styles.pdfTitle} title={titleForPdf}>
+                  {titleForPdf}
+                </div>
+              </div>
+
+              <div className={styles.pdfBtns}>
+                {pdfUrl ? (
+                  <a className="btn btnGhost" href={pdfUrl} target="_blank" rel="noreferrer">
+                    Pestaña
+                  </a>
+                ) : (
+                  <button className="btn btnGhost" type="button" disabled>
+                    Pestaña
+                  </button>
+                )}
+                <button className="btn btnPrimary" type="button" onClick={closePdf}>
+                  Cerrar
+                </button>
+              </div>
+            </div>
+
+            <div className={styles.pdfBody}>
+              {pdfLoading ? (
+                <div className={styles.viewerState}>Cargando PDF…</div>
+              ) : pdfError ? (
+                <div className={styles.viewerStateErr}>{pdfError}</div>
+              ) : pdfUrl ? (
+                <iframe className={styles.pdfFrame} src={pdfUrl} title="PDF" />
+              ) : (
+                <div className={styles.viewerState}>Preparando…</div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
