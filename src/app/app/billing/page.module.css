@@ -1,0 +1,249 @@
+.page {
+  display: grid;
+  gap: 14px;
+}
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.kicker {
+  display: inline-flex;
+  font-size: 12px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(12, 14, 18, 0.10);
+}
+
+@media (prefers-color-scheme: dark) {
+  .kicker {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+}
+
+.h1 {
+  margin: 10px 0 6px;
+  font-size: 26px;
+  font-weight: 860;
+  letter-spacing: -0.02em;
+}
+
+.sub {
+  margin: 0;
+  font-size: 13.5px;
+  opacity: 0.78;
+}
+
+.badge {
+  font-weight: 820;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(12, 14, 18, 0.10);
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+}
+
+.subStatus {
+  opacity: 0.86;
+}
+
+.headActions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.msg {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(12, 14, 18, 0.10);
+  box-shadow: 0 14px 46px rgba(2, 6, 23, 0.10);
+  font-size: 13.5px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .msg {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 980px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  border-radius: 22px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(12, 14, 18, 0.10);
+  box-shadow: 0 14px 46px rgba(2, 6, 23, 0.10);
+}
+
+.tier_bronce {
+  box-shadow: 0 14px 46px rgba(205, 127, 50, 0.10);
+}
+
+.tier_plata {
+  box-shadow: 0 14px 46px rgba(148, 163, 184, 0.10);
+}
+
+.tier_oro {
+  box-shadow: 0 14px 46px rgba(245, 158, 11, 0.10);
+}
+
+@media (prefers-color-scheme: dark) {
+  .card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+}
+
+.card[data-active="true"] {
+  outline: 2px solid rgba(56, 189, 248, 0.22);
+  box-shadow: 0 20px 70px rgba(56, 189, 248, 0.10);
+}
+
+.cardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardTitle {
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.cardSub {
+  margin-top: 4px;
+  font-size: 12.5px;
+  opacity: 0.75;
+}
+
+.cardPill {
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: rgba(10, 11, 15, 1);
+  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.kpis {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.kpi {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.44);
+  border: 1px solid rgba(12, 14, 18, 0.10);
+}
+
+@media (prefers-color-scheme: dark) {
+  .kpi {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+}
+
+.kpiL {
+  font-size: 12.5px;
+  opacity: 0.78;
+}
+
+.kpiV {
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.btnFull {
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+}
+
+.footerText {
+  font-size: 13px;
+  opacity: 0.78;
+}
+
+.footerBtns {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Loading */
+.loadingShell {
+  min-height: 40vh;
+  display: grid;
+  place-items: center;
+}
+
+.loadingCard {
+  border-radius: 22px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(12, 14, 18, 0.10);
+  box-shadow: 0 14px 46px rgba(2, 6, 23, 0.10);
+}
+
+@media (prefers-color-scheme: dark) {
+  .loadingCard {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+  }
+}
+
+.loadingTitle {
+  font-weight: 900;
+}
+
+.loadingSub {
+  margin-top: 4px;
+  font-size: 12.5px;
+  opacity: 0.75;
+}

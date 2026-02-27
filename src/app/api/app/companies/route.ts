@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cleanRut, isValidRut } from "@/lib/rut";
+import { guardCreateCompany, resolveTierFromUser } from "@/lib/planGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +94,16 @@ export async function POST(req: NextRequest) {
   try {
     const auth = await requireUser(req);
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
+    // ✅ Plan gate (suscripción)
+    const { tier } = resolveTierFromUser(auth.user);
+    const gate = await guardCreateCompany(auth.supabase, auth.user.id, tier);
+    if (!gate.ok) {
+      return NextResponse.json(
+        { error: gate.error, plan: { tier: gate.tier, used: gate.used, limit: gate.limit } },
+        { status: gate.status }
+      );
+    }
 
     const body = await req.json().catch(() => ({}));
 

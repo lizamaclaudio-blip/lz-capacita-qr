@@ -46,6 +46,7 @@ export default function MobileNavDrawer({ open, onClose, email, greetingName, on
     { href: "/app/companies", label: "Empresas", icon: "🏢" },
     { href: "/app/sessions", label: "Charlas", icon: "🎤" },
     { href: "/app/pdfs", label: "PDFs", icon: "📄" },
+    { href: "/app/billing", label: "Suscripción", icon: "💳" },
     { href: "/app/profile", label: "Perfil", icon: "👤" },
   ];
 

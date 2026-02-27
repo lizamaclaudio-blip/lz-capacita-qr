@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { cleanRut, isValidRut } from "@/lib/rut";
+import { guardCheckinCapacity } from "@/lib/planGuard";
+import { normalizePlanTier } from "@/lib/planTier";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
 
     const { data: session, error: sErr } = await sb
       .from("sessions")
-      .select("id, code, status, closed_at, company_id")
+      .select("id, code, status, closed_at, company_id, owner_id")
       .eq("code", code)
       .maybeSingle();
 
@@ -55,6 +57,28 @@ export async function POST(req: NextRequest) {
 
     const isClosed = (session.status || "").toLowerCase() === "closed" || !!session.closed_at;
     if (isClosed) return bad("Session is closed", 409);
+
+    // ✅ Plan gate: máximo asistentes por charla
+    try {
+      const ownerId = (session as any).owner_id as string | undefined;
+      if (ownerId) {
+        const { data: u } = await sb.auth.admin.getUserById(ownerId);
+        const md: any = u?.user?.user_metadata || {};
+        const email = String(u?.user?.email || "").toLowerCase();
+        // Owner emails => diamante
+        const ownerEmails = (process.env.NEXT_PUBLIC_OWNER_EMAILS || "")
+          .split(",")
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean);
+        const isOwner = ownerEmails.length ? ownerEmails.includes(email) : email === "lizamaclaudio@gmail.com";
+        const tier = isOwner ? "diamante" : normalizePlanTier(md.plan_tier || md.plan || md.tier);
+
+        const cap = await guardCheckinCapacity(sb, session.id, tier);
+        if (!cap.ok) return bad(cap.error, cap.status);
+      }
+    } catch {
+      // si falla el gate, no bloqueamos el check-in (fail-open)
+    }
 
     // Prevent duplicates by session_id + rut
     const { data: existing, error: eErr } = await sb

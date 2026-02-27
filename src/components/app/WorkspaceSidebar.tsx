@@ -74,6 +74,7 @@ export default function WorkspaceSidebar({ greetingName, email, onLogout }: Prop
     { href: "/app/companies", label: "Mis Empresas", icon: "🏢" },
     { href: "/app/sessions", label: "Mis Charlas", icon: "🎤" },
     { href: "/app/pdfs", label: "Mis PDFs", icon: "📄" },
+    { href: "/app/billing", label: "Suscripción", icon: "💳" },
     { href: "/app/profile", label: "Mi Perfil", icon: "👤" },
     ...(isOwner ? [{ href: "/app/owner", label: "Owner", icon: "🛡️" }] : []),
   ];

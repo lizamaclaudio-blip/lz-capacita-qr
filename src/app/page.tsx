@@ -12,6 +12,16 @@ type LandingStats = {
   pdfs: number;
 };
 
+type Plan = {
+  tier: "bronce" | "plata" | "oro";
+  title: string;
+  price: string;
+  subtitle: string;
+  bullets: string[];
+  cta: string;
+  popular?: boolean;
+};
+
 function fmtInt(n: number) {
   try {
     return new Intl.NumberFormat("es-CL").format(n);
@@ -46,6 +56,52 @@ function useCountUp(target: number, durationMs = 900) {
 export default function HomePage() {
   const [stats, setStats] = useState<LandingStats | null>(null);
   const [statsUpdatedAt, setStatsUpdatedAt] = useState<string | null>(null);
+
+  const plans: Plan[] = useMemo(
+    () => [
+      {
+        tier: "bronce",
+        title: "Bronce",
+        price: "Desde $… / mes",
+        subtitle: "Para partir rápido",
+        bullets: [
+          "1 empresa",
+          "Hasta 10 charlas / mes",
+          "Hasta 60 asistentes por charla",
+          "PDF final con firmas",
+        ],
+        cta: "Empezar",
+      },
+      {
+        tier: "plata",
+        title: "Plata",
+        price: "Desde $… / mes",
+        subtitle: "El más elegido",
+        bullets: [
+          "3 empresas",
+          "Hasta 60 charlas / mes",
+          "Hasta 250 asistentes por charla",
+          "Soporte prioritario",
+        ],
+        cta: "Elegir Plata",
+        popular: true,
+      },
+      {
+        tier: "oro",
+        title: "Oro",
+        price: "Desde $… / mes",
+        subtitle: "Para equipos intensivos",
+        bullets: [
+          "Hasta 15 empresas",
+          "Hasta 400 charlas / mes",
+          "Hasta 1200 asistentes por charla",
+          "Control + reportes",
+        ],
+        cta: "Elegir Oro",
+      },
+    ],
+    []
+  );
 
   // Fetch stats (no rompe la landing si falla)
   useEffect(() => {
@@ -122,6 +178,9 @@ export default function HomePage() {
           <nav className={styles.menu} aria-label="Navegación">
             <a className={styles.menuLink} href="#producto">
               Producto
+            </a>
+            <a className={styles.menuLink} href="#planes">
+              Planes
             </a>
             <a className={styles.menuLink} href="#numeros">
               En números
@@ -426,6 +485,72 @@ export default function HomePage() {
               <div className={styles.wLineShort} />
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* PLANES */}
+      <section id="planes" className={styles.section}>
+        <div className={styles.sectionHeadRow}>
+          <div>
+            <h2 className={`${styles.h2} ${styles.reveal}`} data-reveal style={{ ["--d" as any]: "0ms" }}>
+              Planes
+            </h2>
+            <p className={`${styles.lead} ${styles.reveal}`} data-reveal style={{ ["--d" as any]: "60ms" }}>
+              Suscripción mensual. Cambia de plan cuando quieras.
+            </p>
+          </div>
+
+          <div className={`${styles.plansNote} ${styles.reveal}`} data-reveal style={{ ["--d" as any]: "90ms" }}>
+            Modo Diamante es interno (Owner).
+          </div>
+        </div>
+
+        <div className={styles.pricingGrid}>
+          {plans.map((p, i) => (
+            <div
+              key={p.tier}
+              className={`${styles.planFrame} ${styles[`tier_${p.tier}`]} ${styles.reveal}`}
+              data-reveal
+              style={{ ["--d" as any]: `${i * 70}ms` }}
+              data-pop={p.popular ? "true" : "false"}
+            >
+              <div className={styles.planInner}>
+                <div className={styles.planTop}>
+                  <div>
+                    <div className={styles.planTitleRow}>
+                      <div className={styles.planTitle}>{p.title}</div>
+                      {p.popular ? <div className={styles.planPill}>POPULAR</div> : null}
+                    </div>
+                    <div className={styles.planSubtitle}>{p.subtitle}</div>
+                  </div>
+
+                  <div className={styles.planPrice}>{p.price}</div>
+                </div>
+
+                <ul className={styles.planList}>
+                  {p.bullets.map((b) => (
+                    <li key={b} className={styles.planItem}>
+                      <span className={styles.check}>✓</span>
+                      <span>{b}</span>
+                    </li>
+                  ))}
+                </ul>
+
+                <Link href={`/signup?plan=${p.tier}`} className={`btn ${p.popular ? "btnPrimary" : "btnCta"} ${styles.planBtn}`}>
+                  {p.cta} <span className={styles.arrow}>→</span>
+                </Link>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className={`${styles.plansFoot} ${styles.reveal}`} data-reveal style={{ ["--d" as any]: "260ms" }}>
+          <div className={styles.plansFootText}>
+            ¿Necesitas algo a medida? Escríbenos y armamos un plan "Empresa".
+          </div>
+          <Link href="/signup" className={`btn btnGhost ${styles.btnLg}`}>
+            Probar gratis
+          </Link>
         </div>
       </section>
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { cleanRut, isValidRut, formatRutChile, normalizeRutInput } from "@/lib/rut";
+import { normalizePlanTier, planLabel, type PlanTier } from "@/lib/planTier";
 import styles from "./page.module.css";
 
 type UserMeta = {
@@ -32,6 +33,10 @@ export default function ProfilePage() {
   const [ok, setOk] = useState<string | null>(null);
 
   const [email, setEmail] = useState<string>("");
+
+  // Suscripción
+  const [planTier, setPlanTier] = useState<PlanTier>("bronce");
+  const [subStatus, setSubStatus] = useState<string | null>(null);
 
   // Perfil (metadata)
   const [firstName, setFirstName] = useState("");
@@ -93,6 +98,14 @@ export default function ProfilePage() {
     const userEmail = user.email ?? "";
     setEmail(userEmail);
     lastLoadedEmail.current = userEmail;
+
+    const ownerEmails = (process.env.NEXT_PUBLIC_OWNER_EMAILS || "")
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const isOwner = ownerEmails.length ? ownerEmails.includes(userEmail.toLowerCase()) : userEmail.toLowerCase() === "lizamaclaudio@gmail.com";
+    setPlanTier(isOwner ? "diamante" : normalizePlanTier((md as any).plan_tier || (md as any).plan || (md as any).tier));
+    setSubStatus((md as any).subscription_status || null);
 
     setFirstName(toStr(md.first_name));
     setLastName(toStr(md.last_name));
@@ -259,6 +272,20 @@ export default function ProfilePage() {
             Recargar
           </button>
         </div>
+      </div>
+
+      {/* Plan */}
+      <div className={styles.planCard}>
+        <div>
+          <div className={styles.planTitle}>Plan</div>
+          <div className={styles.planSub}>
+            {planLabel(planTier, planTier === "diamante")} {subStatus ? `· ${String(subStatus)}` : ""}
+          </div>
+        </div>
+        <button className="btn btnGhost" type="button" onClick={() => router.push("/app/billing")}
+          title="Ver planes y suscripción">
+          Ver suscripción
+        </button>
       </div>
 
       {err ? <div className={styles.errBox}>{err}</div> : null}
